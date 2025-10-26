@@ -6,6 +6,7 @@ import java.util.List;
 import org.springframework.security.web.util.matcher.IpAddressMatcher;
 
 public class GetClientIp {
+
   // Danh sách các dải IP nội bộ và private theo chuẩn RFC 1918 và loopback
   private static final List<String> LOCAL_IP_RANGES = Arrays.asList(
       "127.0.0.1/32",      // Loopback IPv4

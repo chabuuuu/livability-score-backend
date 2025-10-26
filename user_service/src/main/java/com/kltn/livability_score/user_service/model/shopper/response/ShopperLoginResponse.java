@@ -1,4 +1,4 @@
-package com.kltn.livability_score.user_service.model.user.response;
+package com.kltn.livability_score.user_service.model.shopper.response;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.AllArgsConstructor;
@@ -10,7 +10,8 @@ import lombok.Setter;
 @Setter
 @AllArgsConstructor
 @NoArgsConstructor
-public class UserRegisterRes {
-    @Schema(description = "Token of the user", example = "user_token")
-    private String token;
+public class ShopperLoginResponse {
+
+  @Schema(description = "Token of the user", example = "user_token")
+  private String token;
 }

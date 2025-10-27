@@ -32,6 +32,20 @@
   </properties>
 	<dependencies>
     <dependency>
+      <groupId>org.n52.jackson</groupId>
+      <artifactId>jackson-datatype-jts</artifactId>
+      <version>1.2.4</version>
+    </dependency>
+    <dependency>
+      <groupId>org.hibernate.orm</groupId>
+      <artifactId>hibernate-spatial</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.locationtech.jts</groupId>
+      <artifactId>jts-core</artifactId>
+      <version>1.20.0</version>
+    </dependency>
+    <dependency>
       <artifactId>spring-boot-starter-data-redis</artifactId>
       <groupId>org.springframework.boot</groupId>
     </dependency>

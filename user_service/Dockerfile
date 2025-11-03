@@ -21,7 +21,7 @@ VOLUME /tmp
 RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
 
 COPY --from=build $JAR_FILE app.jar
-
+COPY --from=build /usr/app/certs /certs
 
 #ADD $JAR_FILE app.jar
 ENTRYPOINT exec java -jar /app.jar

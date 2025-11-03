@@ -1,0 +1,16 @@
+version: "3.9"
+
+services:
+  kltn-user-service-be:
+    container_name: kltn-user-service-be
+    image: kltn-user-service-be:${IMAGE_VERSION}
+    restart: unless-stopped
+    ports:
+      - "9091:8080"
+    env_file:
+      - .env
+    deploy:
+      resources:
+        limits:
+          cpus: "0.3"
+          memory: 500M

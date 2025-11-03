@@ -16,7 +16,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
-@RequestMapping("/api/v1/admin/properties")
+@RequestMapping("/api/v1/properties/admin")
 @RequiredArgsConstructor
 @Tag(name = "Admin Property API", description = "APIs for admin to manage properties")
 @SecurityRequirement(name = "bearerAuth") // Assume JWT auth

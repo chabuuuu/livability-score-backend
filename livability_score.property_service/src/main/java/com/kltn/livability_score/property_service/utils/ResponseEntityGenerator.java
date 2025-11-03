@@ -1,5 +1,7 @@
 package com.kltn.livability_score.property_service.utils;
 
+import com.kltn.livability_score.property_service.model.base_format.response.ResponsePagingVO;
+import com.kltn.livability_score.property_service.model.specifications.SearchDataDto;
 import org.springframework.data.domain.Page;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -76,4 +78,27 @@ public class ResponseEntityGenerator<T> {
         ResponsePageableVO responseVo = new ResponsePageableVO((int) body.getTotalElements(), product_list, request);
         return new ResponseEntity<>(new ResponseVOBuilder().addData(responseVo).build(), HttpStatus.OK);
     }
+
+  /*
+   * Generate ResponseEntity with search
+   */
+  public static <T> ResponseEntity<ResponsePagingVO<T>> searchFormat(Page<T> body,
+      SearchDataDto request) {
+    List<T> product_list = body.getContent();
+
+    RequestPageableVO requestPageableVO = new RequestPageableVO();
+    requestPageableVO.setPage(request.getPage());
+    requestPageableVO.setRpp(request.getRpp());
+
+    ResponsePageableVO<T> responseVO = new ResponsePageableVO<T>(
+        body.getTotalElements(), product_list, requestPageableVO);
+
+    ResponsePagingVO<T> responsePagingVo = new ResponsePagingVO<>();
+
+    responsePagingVo.setData(responseVO);
+    responsePagingVo.setResult("Succeeded");
+    responsePagingVo.setStatus("200");
+
+    return new ResponseEntity<>(responsePagingVo, HttpStatus.OK);
+  }
 }

@@ -6,6 +6,7 @@ import com.kltn.livability_score.property_service.entity.PropertyImageEntity;
 import com.kltn.livability_score.property_service.entity.TagEntity;
 import com.kltn.livability_score.property_service.model.property.request.PropertyRequest;
 import com.kltn.livability_score.property_service.model.property.response.PropertyDetailResponse;
+import com.kltn.livability_score.property_service.model.property.response.PropertyMapSummaryResponse;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
 import org.mapstruct.MappingTarget;
@@ -14,6 +15,8 @@ import org.mapstruct.NullValuePropertyMappingStrategy;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
 
 @Mapper(componentModel = "spring",
     nullValuePropertyMappingStrategy = NullValuePropertyMappingStrategy.IGNORE)
@@ -57,4 +60,23 @@ public interface PropertyMapper {
         .map(TagEntity::getName)
         .collect(Collectors.toList());
   }
+
+  List<PropertyDetailResponse> toResponseList(List<PropertyEntity> entities);
+
+
+  default Page<PropertyDetailResponse> toPageResponse(Page<PropertyEntity> entities) {
+    // Nếu đầu vào là null, trả về null
+    if (entities == null) {
+      return null;
+    }
+
+    List<PropertyDetailResponse> responses = toResponseList(entities.getContent());
+
+    // 2. Tạo một đối tượng PageImpl mới với nội dung đã chuyển đổi và thông tin phân trang từ Page cũ
+    return new PageImpl<>(responses, entities.getPageable(), entities.getTotalElements());
+  }
+
+  PropertyMapSummaryResponse toMapSummaryResponse(PropertyEntity entity);
+
+  List<PropertyMapSummaryResponse> toMapSummaryResponseList(List<PropertyEntity> entities);
 }

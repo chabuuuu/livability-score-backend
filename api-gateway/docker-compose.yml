@@ -1,0 +1,17 @@
+version: "3.9"
+services:
+  nginx-api-gateway-se356-be:
+    image: nginx:alpine
+    container_name: nginx-api-gateway-se356-be
+    ports:
+      - "9607:80"
+    volumes:
+      - ./nginx/prod:/etc/nginx/conf.d
+    restart: always
+    networks:
+      - se356-be-network
+
+networks:
+  se356-be-network:
+    name: se356-be-network
+    driver: bridge

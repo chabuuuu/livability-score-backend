@@ -145,7 +145,8 @@ public class PropertyServiceImpl implements PropertyService {
 
     Page<PropertyEntity> propertyEntityPage = propertyRepository.findAll(spec, pageable);
 
-    return propertyMapper.toPageResponse(propertyEntityPage);  }
+    return propertyMapper.toPageResponse(propertyEntityPage);
+  }
 
   @Override
   @Transactional(readOnly = true)

@@ -1,0 +1,16 @@
+version: "3.9"
+
+services:
+  kltn-property-service-be:
+    container_name: kltn-property-service-be
+    image: kltn-property-service-be:${IMAGE_VERSION}
+    restart: unless-stopped
+    ports:
+      - "9092:8080"
+    env_file:
+      - .env
+    deploy:
+      resources:
+        limits:
+          cpus: "0.3"
+          memory: 700M

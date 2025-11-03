@@ -13,13 +13,13 @@ env:
   # Container name for the service
   CONTAINER_NAME: kltn-property-service-be
 
-  # Docker Compose file path
-  DOCKER_COMPOSE_PATH: ./docker-compose.yml
-
   # The filename for the Docker image artifact
   IMAGE_FILENAME: kltn-property-service-be.tar
 
   SERVICE_FOLDER: property_service
+
+  # Docker Compose file path
+  DOCKER_COMPOSE_PATH: ./property_service/docker-compose.yml
 
   PROJECT_NAME: "KLTN Property Service [BE]"
 

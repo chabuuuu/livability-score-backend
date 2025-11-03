@@ -7,6 +7,8 @@ import lombok.Getter;
 import lombok.Setter;
 import lombok.ToString;
 import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.SQLDelete;
+import org.hibernate.annotations.SQLRestriction;
 import org.hibernate.annotations.UpdateTimestamp;
 import org.springframework.data.annotation.CreatedDate;
 
@@ -14,6 +16,8 @@ import org.springframework.data.annotation.CreatedDate;
 @Setter
 @MappedSuperclass
 @ToString
+@SQLDelete(sql = "UPDATE #{#entityName} SET delete_at = NOW() WHERE id = ?") // Use entityName
+@SQLRestriction("deletedAt <> 'DELETED'")
 public class BaseEntity {
 
   @Column(updatable = false, name = "create_at")

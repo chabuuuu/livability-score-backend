@@ -12,13 +12,19 @@ import com.kltn.livability_score.property_service.model.jwt.vo.JwtTokenVo;
 import com.kltn.livability_score.property_service.model.property.request.ApprovePropertyRequest;
 import com.kltn.livability_score.property_service.model.property.request.PropertyRequest;
 import com.kltn.livability_score.property_service.model.property.response.PropertyDetailResponse;
+import com.kltn.livability_score.property_service.model.property.response.PropertyMapSummaryResponse;
+import com.kltn.livability_score.property_service.model.specifications.SearchDataDto;
 import com.kltn.livability_score.property_service.repository.PropertyRepository;
 import com.kltn.livability_score.property_service.repository.TagRepository;
 import com.kltn.livability_score.property_service.services.PropertyService;
+import com.kltn.livability_score.property_service.utils.SearchUtil;
 import com.kltn.livability_score.property_service.utils.SecurityUtil;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.SneakyThrows;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -122,6 +128,35 @@ public class PropertyServiceImpl implements PropertyService {
 
     PropertyEntity savedEntity = propertyRepository.save(entity);
     return propertyMapper.toDetailResponse(savedEntity);
+  }
+
+  @Override
+  public Page<PropertyDetailResponse> searchProperty(SearchDataDto searchDataDto) {
+    Specification<PropertyEntity> spec = SearchUtil.getSpecification(searchDataDto,
+        PropertyEntity.class);
+
+    // Add deletedAt filter in the specification
+
+    spec = spec.and((root, query, criteriaBuilder)
+        -> criteriaBuilder.isNull(root.get("deletedAt"))
+    );
+
+    Pageable pageable = SearchUtil.getPageable(searchDataDto);
+
+    Page<PropertyEntity> propertyEntityPage = propertyRepository.findAll(spec, pageable);
+
+    return propertyMapper.toPageResponse(propertyEntityPage);  }
+
+  @Override
+  @Transactional(readOnly = true)
+  public List<PropertyMapSummaryResponse> findPropertiesInViewport(
+      double minLat, double minLng, double maxLat, double maxLng
+  ) {
+    List<PropertyEntity> entities = propertyRepository.findPropertiesInViewport(
+        minLat, minLng, maxLat, maxLng
+    );
+
+    return propertyMapper.toMapSummaryResponseList(entities);
   }
 
   // --- Private Helper Methods ---

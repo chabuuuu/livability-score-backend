@@ -27,6 +27,9 @@ on:
   push:
     branches:
       - staging
+    paths:
+      - "property_service/**"
+      - ".github/workflows/**"
 
 jobs:
   build_and_publish:

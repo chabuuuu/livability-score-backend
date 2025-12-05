@@ -1,4 +1,4 @@
-FROM openjdk:21-jdk-slim AS build
+FROM eclipse-temurin:21-jdk-jammy AS build
 ENV HOME=/usr/app
 RUN mkdir -p $HOME
 WORKDIR $HOME
@@ -11,7 +11,7 @@ RUN apt-get update && apt-get install -y maven
 RUN mvn clean
 RUN mvn package -DskipTests=true
 
-FROM openjdk:21-jdk-slim
+FROM eclipse-temurin:21-jdk-jammy
 
 ARG JAR_FILE=/usr/app/target/*.jar
 
@@ -21,7 +21,7 @@ VOLUME /tmp
 RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
 
 COPY --from=build $JAR_FILE app.jar
-COPY --from=build /usr/app/certs /certs
+
 
 #ADD $JAR_FILE app.jar
 ENTRYPOINT exec java -jar /app.jar

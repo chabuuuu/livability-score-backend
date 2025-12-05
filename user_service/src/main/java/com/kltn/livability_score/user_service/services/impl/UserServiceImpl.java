@@ -55,7 +55,6 @@ public class UserServiceImpl implements UserService {
   private final UserProfileRepository userProfileRepository;
 
   @Override
-  @SneakyThrows
   @Transactional(readOnly = true)
   public UserProfileResponse getUserProfileById(Long userId) {
     // findById() đã tự động xử lý soft-delete (nhờ @Where)
@@ -66,7 +65,6 @@ public class UserServiceImpl implements UserService {
   }
 
   @Override
-  @SneakyThrows
   @Transactional // Rất quan trọng vì chúng ta sửa 2 Bảng (users và user_profiles)
   public UserProfileResponse reviewSellerRequest(Long userId, AdminApproveSellerRequest request) {
     SellerApprovalStatus decision = request.getStatus();
@@ -116,7 +114,6 @@ public class UserServiceImpl implements UserService {
   }
 
   @Override
-  @SneakyThrows
   @Transactional
   public UserProfileResponse updateMyProfile(UserProfileUpdateRequest request) {
     JwtTokenVo session = SecurityUtil.getSession();
@@ -160,7 +157,6 @@ public class UserServiceImpl implements UserService {
   }
 
   @Override
-  @SneakyThrows
   @Transactional
   public UserProfileResponse requestSellerRole() {
     JwtTokenVo session = SecurityUtil.getSession();
@@ -216,7 +212,6 @@ public class UserServiceImpl implements UserService {
         .orElseThrow(() -> new BaseError(UserProfileException.PROFILE_NOT_FOUND));
   }
 
-  @SneakyThrows
   @Override
   public UserGetMeResponse getMe() {
     JwtTokenVo jwtTokenVo = SecurityUtil.getSession();
@@ -237,7 +232,6 @@ public class UserServiceImpl implements UserService {
     return userGetMeResponse;
   }
 
-  @SneakyThrows
   @Override
   public UserLoginResponse login(UserLoginRequest userLoginRequest, String clientIp) {
     String email = userLoginRequest.getEmail();
@@ -270,7 +264,6 @@ public class UserServiceImpl implements UserService {
     return userLoginResponse;
   }
 
-  @SneakyThrows
   @Override
   public void register(UserRegisterRequest userRegisterRequest, String clientIp) {
     // Kiểm tra xem có tồn tại username này hay không
@@ -310,7 +303,6 @@ public class UserServiceImpl implements UserService {
     emailService.sendRegisterAccountOtpEmail(userRegisterRequest.getEmail(), recipientName, otp);
   }
 
-  @SneakyThrows
   @Override
   public void verifyEmailAndCreateUser(UserVerifyEmailRequest userVerifyEmailRequest,
       String clientIp) {
@@ -337,7 +329,6 @@ public class UserServiceImpl implements UserService {
     registerUserCacheRepository.deleteById(email);
   }
 
-  @SneakyThrows
   private UserEntity createUser(UserRegisterRequest userRegisterRequest
   ) {
 
@@ -353,6 +344,9 @@ public class UserServiceImpl implements UserService {
 
     user.setPasswordHash(userRegisterRequest.getPassword());
     user.setUserProfile(userProfileEntity);
+
+    // Set role
+    user.setRoles(List.of(RoleTypeEnum.USER.toString()));
 
     return userRepository.save(user);
   }

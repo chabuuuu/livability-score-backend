@@ -24,6 +24,7 @@ import com.kltn.livability_score.user_service.model.user.request.UserVerifyEmail
 import com.kltn.livability_score.user_service.model.user.response.UserGetMeResponse;
 import com.kltn.livability_score.user_service.model.user.response.UserLoginResponse;
 import com.kltn.livability_score.user_service.model.user.response.UserProfileResponse;
+import com.kltn.livability_score.user_service.repository.PreferencePresetRepository;
 import com.kltn.livability_score.user_service.repository.UserProfileRepository;
 import com.kltn.livability_score.user_service.repository.UserRepository;
 import com.kltn.livability_score.user_service.repository.caching.RegisterUserCacheRepository;
@@ -53,6 +54,7 @@ public class UserServiceImpl implements UserService {
   private final EmailService emailService;
   private final UserProfileMapper userProfileMapper;
   private final UserProfileRepository userProfileRepository;
+  private final PreferencePresetRepository presetRepository;
 
   @Override
   @Transactional(readOnly = true)
@@ -228,6 +230,18 @@ public class UserServiceImpl implements UserService {
     UserGetMeResponse userGetMeResponse = userMapper.toUserGetMeResponse(user.getUserProfile());
     userGetMeResponse.setEmail(user.getEmail());
     userGetMeResponse.setRoles(user.getRoles());
+
+    // Find preference preset ID if exists by user profile perference score
+    presetRepository
+        .findByPreferenceEducationAndPreferenceSafetyAndPreferenceTransportationAndPreferenceShoppingAndPreferenceEntertainmentAndPreferenceEnvironmentAndPreferenceHealthcare(
+            user.getUserProfile().getPreferenceEducation(),
+            user.getUserProfile().getPreferenceSafety(),
+            user.getUserProfile().getPreferenceTransportation(),
+            user.getUserProfile().getPreferenceShopping(),
+            user.getUserProfile().getPreferenceEntertainment(),
+            user.getUserProfile().getPreferenceEnvironment(),
+            user.getUserProfile().getPreferenceHealthcare()
+        ).ifPresent(preset -> userGetMeResponse.setPreferencePresetId(preset.getId()));
 
     return userGetMeResponse;
   }

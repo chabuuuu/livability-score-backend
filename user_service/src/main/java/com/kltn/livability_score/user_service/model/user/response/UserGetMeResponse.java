@@ -34,6 +34,8 @@ public class UserGetMeResponse {
 
   private Instant updateAt;
 
+  private Long preferencePresetId;
+
   private Float preferenceHealthcare;
 
   private Float preferenceSafety;

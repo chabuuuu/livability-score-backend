@@ -1,6 +1,7 @@
 package com.kltn.livability_score.user_service.model.user.response;
 
 import com.kltn.livability_score.user_service.enums.SellerApprovalStatus;
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
 import lombok.AllArgsConstructor;
@@ -36,19 +37,19 @@ public class UserGetMeResponse {
 
   private Long preferencePresetId;
 
-  private Float preferenceHealthcare;
+  private BigDecimal preferenceHealthcare;
 
-  private Float preferenceSafety;
+  private BigDecimal preferenceSafety;
 
-  private Float preferenceEducation;
+  private BigDecimal preferenceEducation;
 
-  private Float preferenceShopping;
+  private BigDecimal preferenceShopping;
 
-  private Float preferenceTransportation;
+  private BigDecimal preferenceTransportation;
 
-  private Float preferenceEnvironment;
+  private BigDecimal preferenceEnvironment;
 
-  private Float preferenceEntertainment;
+  private BigDecimal preferenceEntertainment;
 
   private String liveAddress;
 }

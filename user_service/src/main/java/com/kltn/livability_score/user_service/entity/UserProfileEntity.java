@@ -11,6 +11,7 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.MapsId;
 import jakarta.persistence.OneToOne;
 import jakarta.persistence.Table;
+import java.math.BigDecimal;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -51,25 +52,25 @@ public class UserProfileEntity extends BaseEntity {
   private String preferenceType = "default"; // Gán giá trị default
 
   @Column(name = "preference_safety")
-  private Float preferenceSafety;
+  private BigDecimal preferenceSafety;
 
   @Column(name = "preference_education")
-  private Float preferenceEducation;
+  private BigDecimal preferenceEducation;
 
   @Column(name = "preference_shopping")
-  private Float preferenceShopping;
+  private BigDecimal preferenceShopping;
 
   @Column(name = "preference_transportation")
-  private Float preferenceTransportation;
+  private BigDecimal preferenceTransportation;
 
   @Column(name = "preference_environment")
-  private Float preferenceEnvironment;
+  private BigDecimal preferenceEnvironment;
 
   @Column(name = "preference_entertainment")
-  private Float preferenceEntertainment;
+  private BigDecimal preferenceEntertainment;
 
   @Column(name = "preference_healthcare")
-  private Float preferenceHealthcare;
+  private BigDecimal preferenceHealthcare;
 
   @Column(name = "live_address")
   private String liveAddress;

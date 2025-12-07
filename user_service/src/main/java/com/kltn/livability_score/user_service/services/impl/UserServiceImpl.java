@@ -132,25 +132,25 @@ public class UserServiceImpl implements UserService {
     // Tốt nhất là bạn nên đồng bộ cả 2 thành BigDecimal.
     // Giả sử Entity đã được đổi thành BigDecimal:
     if (request.getPreferenceSafety() != null) {
-      profile.setPreferenceSafety(request.getPreferenceSafety().floatValue());
+      profile.setPreferenceSafety(request.getPreferenceSafety());
     }
     if (request.getPreferenceEducation() != null) {
-      profile.setPreferenceEducation(request.getPreferenceEducation().floatValue());
+      profile.setPreferenceEducation(request.getPreferenceEducation());
     }
     if (request.getPreferenceShopping() != null) {
-      profile.setPreferenceShopping(request.getPreferenceShopping().floatValue());
+      profile.setPreferenceShopping(request.getPreferenceShopping());
     }
     if (request.getPreferenceTransportation() != null) {
-      profile.setPreferenceTransportation(request.getPreferenceTransportation().floatValue());
+      profile.setPreferenceTransportation(request.getPreferenceTransportation());
     }
     if (request.getPreferenceEnvironment() != null) {
-      profile.setPreferenceEnvironment(request.getPreferenceEnvironment().floatValue());
+      profile.setPreferenceEnvironment(request.getPreferenceEnvironment());
     }
     if (request.getPreferenceEntertainment() != null) {
-      profile.setPreferenceEntertainment(request.getPreferenceEntertainment().floatValue());
+      profile.setPreferenceEntertainment(request.getPreferenceEntertainment());
     }
     if (request.getPreferenceHealthcare() != null) {
-      profile.setPreferenceHealthcare(request.getPreferenceHealthcare().floatValue());
+      profile.setPreferenceHealthcare(request.getPreferenceHealthcare());
     }
 
     UserProfileEntity updatedProfile = userProfileRepository.save(profile);

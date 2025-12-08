@@ -33,3 +33,7 @@ Since the platform allows user-generated listings, we implement a **Statistical 
 1.  **Ground Truth Establishment:** We maintain a `market_price_trends` table derived from thousands of verified crawled listings (Mogi.vn).
 2.  **Z-Score Analysis:** When a user submits a property, the system calculates the Z-Score of their requested price against the local average.
 3.  **Outlier Filtering:** Listings with prices deviating significantly (e.g., \> ±2 Standard Deviations) are flagged as "Unverified Outliers" and are **excluded** from the model retraining pipeline to maintain data purity.
+
+### 4\. Architecture
+
+![alt text](./docs/images/KLTN-ARCHITECTURE.jpg)

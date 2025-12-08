@@ -45,11 +45,18 @@ jobs:
       - name: Save Docker image to a tar file
         run: docker save -o ${{ env.IMAGE_FILENAME }} ${{ env.IMAGE_NAME }}
 
-      - name: Upload Docker image as artifact
-        uses: actions/upload-artifact@v4
+      - name: Make image file readable
+        run: chmod 644 ${{ env.IMAGE_FILENAME }}
+
+      - name: Copy Docker image to server
+        uses: appleboy/scp-action@v0.1.7
         with:
-          name: docker-image
-          path: ${{ env.IMAGE_FILENAME }}
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SERVER_SSH_PRIVATE_KEY }}
+          port: 22
+          source: "${{ env.IMAGE_FILENAME }}"
+          target: "/tmp" # Copy to a temporary directory on the server
 
       - name: Clean old docker compose script and old env file
         uses: appleboy/ssh-action@v1.1.0
@@ -75,24 +82,6 @@ jobs:
     needs: build_and_publish
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
-
-      - name: Download Docker image artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: docker-image
-
-      - name: Copy Docker image to server
-        uses: appleboy/scp-action@v0.1.7
-        with:
-          host: ${{ secrets.SERVER_HOST }}
-          username: ${{ secrets.SERVER_USER }}
-          key: ${{ secrets.SERVER_SSH_PRIVATE_KEY }}
-          port: 22
-          source: "${{ env.IMAGE_FILENAME }}"
-          target: "/tmp" # Copy to a temporary directory on the server
-
       - name: Deploy to server
         uses: appleboy/ssh-action@v1.1.0
         with:
@@ -101,21 +90,14 @@ jobs:
           key: ${{ secrets.SERVER_SSH_PRIVATE_KEY }}
           port: 22
           script: |
-            cp ${{ env.ENV_FILE_PATH }} ${{ env.DEPLOY_FOLDER }}/${{ env.SERVICE_FOLDER }}
+            cp ${{ env.ENV_FILE_PATH }} ${{ env.DEPLOY_FOLDER }}
             cd ${{ env.DEPLOY_FOLDER }}
-
             echo "Loading new image from tar file..."
-
             docker load -i /tmp/${{ env.IMAGE_FILENAME }}
-
             if [ "$(docker ps -aq -f name=^${{ env.CONTAINER_NAME }}$)" ]; then
                 docker compose -f ${{ env.DOCKER_COMPOSE_PATH }} down ${{ env.CONTAINER_NAME }}
             fi
-
             echo "Waiting for new container: ${{ env.CONTAINER_NAME }} to pull..."
-
             IMAGE_VERSION=${{ github.ref_name }}-${{ github.sha }} docker compose -f ${{ env.DOCKER_COMPOSE_PATH }} pull ${{ env.CONTAINER_NAME }}
-
             echo "Start new container: ${{ env.CONTAINER_NAME }}..."
-
             IMAGE_VERSION=${{ github.ref_name }}-${{ github.sha }} docker compose -f ${{ env.DOCKER_COMPOSE_PATH }} up -d ${{ env.CONTAINER_NAME }}

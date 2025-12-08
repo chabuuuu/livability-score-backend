@@ -25,6 +25,8 @@ import lombok.SneakyThrows;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
+import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -38,6 +40,7 @@ public class PropertyServiceImpl implements PropertyService {
   private final PropertyRepository propertyRepository;
   private final TagRepository tagRepository;
   private final PropertyMapper propertyMapper;
+  private final StringRedisTemplate redisTemplate;
 
   @Override
   @SneakyThrows
@@ -100,13 +103,19 @@ public class PropertyServiceImpl implements PropertyService {
 
   @Override
   @SneakyThrows
-  @Transactional(readOnly = true)
   public PropertyDetailResponse getPropertyById(Long propertyId) {
     PropertyEntity entity = propertyRepository.findById(propertyId)
         .orElseThrow(() -> new BaseError(PropertyException.PROPERTY_NOT_FOUND));
 
     // Admin or owner can see PENDING, but public should only see APPROVED?
     // For now, just return it. Add role-based check if needed.
+
+    // Increase the view count
+    String key = "property:view_count:" + propertyId;
+    redisTemplate.opsForValue().increment(key);
+
+    // Lưu danh sách các ID đã thay đổi vào 1 Set để Scheduler biết cái nào cần update
+    redisTemplate.opsForSet().add("property:changed_views", String.valueOf(propertyId));
 
     return propertyMapper.toDetailResponse(entity);
   }

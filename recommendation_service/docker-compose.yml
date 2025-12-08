@@ -3,10 +3,7 @@ version: "3.9"
 services:
   kltn-recommendation-service-be:
     container_name: kltn-recommendation-service-be
-    # image: kltn-recommendation-service-be:${IMAGE_VERSION}
-    build:
-      context: .
-      dockerfile: Dockerfile
+    image: kltn-recommendation-service-be:${IMAGE_VERSION}
     restart: unless-stopped
     ports:
       - "9094:8084"

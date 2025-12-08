@@ -29,7 +29,7 @@ on:
       - staging
     paths:
       - "property_service/**"
-      - ".github/workflows/**"
+      - ".github/workflows/property-service.cd.yml"
 
 jobs:
   build_and_publish:

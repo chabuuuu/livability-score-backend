@@ -29,7 +29,7 @@ on:
       - staging
     paths:
       - "media_service/**"
-      - ".github/workflows/**"
+      - ".github/workflows/media-service.cd.yml"
 
 jobs:
   build_and_publish:

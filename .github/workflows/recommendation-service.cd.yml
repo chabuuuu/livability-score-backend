@@ -29,7 +29,7 @@ on:
             - staging
         paths:
             - "recommendation_service/**"
-            - ".github/workflows/**"
+            - ".github/workflows/recommendation-service.cd.yml"
 
 jobs:
     build_and_publish:

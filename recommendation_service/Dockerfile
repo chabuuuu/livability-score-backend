@@ -49,4 +49,4 @@ EXPOSE 8084
 # Lệnh chạy: Sử dụng uvicorn trực tiếp thay vì python main.py
 # --workers 4: Chạy đa luồng (Production nên set workers = số CPU core * 2 + 1)
 # --proxy-headers: Quan trọng nếu chạy sau Nginx/Traefik
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8084", "--workers", "4", "--proxy-headers"]
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8084", "--workers", "3", "--proxy-headers"]

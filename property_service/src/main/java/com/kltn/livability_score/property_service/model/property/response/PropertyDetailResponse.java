@@ -67,4 +67,6 @@ public class PropertyDetailResponse {
 
   // Mapped từ Set<TagEntity>
   private List<String> tagNames;
+
+  private Long viewCount;
 }

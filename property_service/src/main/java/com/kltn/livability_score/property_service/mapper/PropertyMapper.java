@@ -42,7 +42,6 @@ public interface PropertyMapper {
   PropertyDetailResponse toDetailResponse(PropertyEntity entity);
 
   // --- Custom Mappers for Images and Tags ---
-
   default List<String> mapImagesToUrls(List<PropertyImageEntity> images) {
     if (images == null) {
       return List.of();

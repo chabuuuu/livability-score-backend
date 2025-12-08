@@ -5,9 +5,11 @@ import java.util.List;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.stereotype.Repository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
+import org.springframework.transaction.annotation.Transactional;
 
 @Repository
 public interface PropertyRepository extends JpaRepository<PropertyEntity, Long>,
@@ -37,4 +39,9 @@ public interface PropertyRepository extends JpaRepository<PropertyEntity, Long>,
       @Param("maxLat") double maxLat,
       @Param("maxLng") double maxLng
   );
+
+  @Modifying
+  @Transactional
+  @Query("UPDATE PropertyEntity p SET p.viewCount = COALESCE(p.viewCount, 0) + :amount WHERE p.id = :id")
+  void incrementViewCountByAmount(@Param("id") Long id, @Param("amount") Long amount);
 }

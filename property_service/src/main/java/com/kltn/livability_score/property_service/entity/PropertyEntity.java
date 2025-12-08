@@ -122,6 +122,9 @@ public class PropertyEntity extends BaseEntity{
   @Column(name = "user_id", nullable = false)
   private Long userId;
 
+  @Column(name = "view_count")
+  private Long viewCount = 0L;
+
   // --- NEW FIELD: Status for admin approval ---
   @Enumerated(EnumType.STRING)
   @Column(name = "approval_status", nullable = false, length = 50)
@@ -148,6 +151,15 @@ public class PropertyEntity extends BaseEntity{
   )
   // Use Set for ManyToMany
   private Set<TagEntity> tags = new HashSet<>();
+
+  @OneToMany(
+      mappedBy = "property",
+      cascade = CascadeType.ALL,
+      orphanRemoval = true,
+      fetch = FetchType.LAZY
+  )
+// Đổi tên thành 'favorites' vì nó chứa danh sách nhiều người thích
+  private List<UserFavoritePropertyEntity> favorites = new ArrayList<>();
 
   // --- Helper Methods ---
 

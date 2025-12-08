@@ -90,7 +90,7 @@ jobs:
           key: ${{ secrets.SERVER_SSH_PRIVATE_KEY }}
           port: 22
           script: |
-            cp ${{ env.ENV_FILE_PATH }} ${{ env.DEPLOY_FOLDER }}
+            cp ${{ env.ENV_FILE_PATH }} ${{ env.DEPLOY_FOLDER }}/${{ env.SERVICE_FOLDER }}
             cd ${{ env.DEPLOY_FOLDER }}
             echo "Loading new image from tar file..."
             docker load -i /tmp/${{ env.IMAGE_FILENAME }}

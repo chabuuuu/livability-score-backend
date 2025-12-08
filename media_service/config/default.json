@@ -33,7 +33,7 @@
   "media_service": {
     "url": "https://livability-media.sonata.io.vn",
     "video_bucket": {
-      "path": "livability-score-media"
+      "path": "livability-score-video"
     },
     "image_bucket": {
       "path": "livability-score-media"

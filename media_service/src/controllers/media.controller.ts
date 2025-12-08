@@ -2,6 +2,7 @@ import { MediaService } from "@/services/media.service";
 import BaseError from "@/utils/base.error";
 import { GlobalConfig } from "@/utils/config/global-config.util";
 import { Request, Response, NextFunction } from "express";
+import { v4 as uuidv4 } from "uuid";
 
 export class MediaController {
   private mediaService: MediaService;
@@ -29,13 +30,10 @@ export class MediaController {
     if (!req.file) {
       return res.send_badRequest("No file uploaded or file is too large.");
     }
-    if (!req.params.fileName) {
-      return res.send_badRequest("No file name provided.");
-    }
 
     try {
       const tempFilePath = req.file.path;
-      const fileName = req.params.fileName;
+      const fileName = uuidv4();
 
       const bucketName = GlobalConfig.media_service.video_bucket.path;
 

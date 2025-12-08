@@ -29,7 +29,7 @@ on:
       - staging
     paths:
       - "user_service/**"
-      - ".github/workflows/**"
+      - ".github/workflows/user-service.cd.yml"
 
 jobs:
   build_and_publish:

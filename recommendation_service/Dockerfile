@@ -37,13 +37,7 @@ ENV PATH=/root/.local/bin:$PATH
 COPY . .
 
 # Copy file chứng chỉ CA nếu cần thiết (đảm bảo file này nằm cùng thư mục build)
-# COPY ca.pem /app/ca.pem 
-
-# --- CẤU HÌNH BẢO MẬT & MÔI TRƯỜNG ---
-
-# Tạo user non-root để chạy app (Best Practice)
-RUN useradd -m appuser && chown -R appuser /app
-USER appuser
+# COPY /certs /app/certs 
 
 # Tối ưu hóa Python cho container
 ENV PYTHONDONTWRITEBYTECODE=1 

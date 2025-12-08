@@ -1,0 +1,16 @@
+version: "3.9"
+
+services:
+  kltn-media-service-be:
+    container_name: kltn-media-service-be
+    image: kltn-media-service-be:${IMAGE_VERSION}
+    restart: unless-stopped
+    ports:
+      - "9093:8080"
+    env_file:
+      - .env
+    deploy:
+      resources:
+        limits:
+          cpus: "0.1"
+          memory: 300M

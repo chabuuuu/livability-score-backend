@@ -9,7 +9,7 @@ const mediaController = new MediaController();
 
 mediaRouter
   .post(
-    "/upload-video/:fileName",
+    "/upload-video",
     uploadVideoMiddleware.single("file"),
     mediaController.uploadVideo.bind(mediaController)
   )

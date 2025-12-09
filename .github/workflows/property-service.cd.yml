@@ -3,9 +3,10 @@ name: "[STAGING] CI & CD KLTN Property Service [BE] (Swarm)"
 env:
   SERVICE_NAME: kltn_property_stack
   SERVICE_IMAGE: kltn-property-service-be
-  DEPLOY_FOLDER: /home/gha-runner/kltn/backend/property_service
+  DEPLOY_FOLDER: /home/gha-runner/kltn/backend/property_service/source
   ENV_FILE_PATH: /home/gha-runner/kltn/backend/property_service/env_file/.env
   SERVICE_FOLDER: property_service
+  DOCKER_COMPOSE_PATH: ./property_service/docker-compose.yml
 
 on:
   push:
@@ -100,7 +101,7 @@ jobs:
 
             # 4. Deploy Stack
             # --with-registry-auth: Gửi thông tin login xuống các Worker node để chúng pull được image
-            docker stack deploy --with-registry-auth -c docker-compose.yml ${{ env.SERVICE_NAME }}
+            docker stack deploy --with-registry-auth -c ${{ env.DOCKER_COMPOSE_PATH }} ${{ env.SERVICE_NAME }}
 
             # (Optional) Cleanup image cũ để tiết kiệm ổ cứng (prune)
             docker image prune -af

@@ -97,7 +97,7 @@ jobs:
             # Copy file .env vào vị trí mong muốn (nếu chưa đúng chỗ)
             # Giả sử file .env đã nằm sẵn ở ENV_FILE_PATH và bạn muốn link nó
             # docker stack deploy hỗ trợ env_file nhưng file phải nằm cùng chỗ lệnh chạy
-            cp ${{ env.ENV_FILE_PATH }} .env
+            cp ${{ env.ENV_FILE_PATH }} ${{ env.DEPLOY_FOLDER }}/${{ env.SERVICE_FOLDER }}
 
             # 4. Deploy Stack
             # --with-registry-auth: Gửi thông tin login xuống các Worker node để chúng pull được image

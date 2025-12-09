@@ -2,15 +2,28 @@ version: "3.9"
 
 services:
   kltn-user-service-be:
-    container_name: kltn-user-service-be
-    image: kltn-user-service-be:${IMAGE_VERSION}
-    restart: unless-stopped
+    image: ghcr.io/${GITHUB_REPOSITORY_OWNER_LOWERCASE}/kltn-user-service-be:${IMAGE_VERSION}
+
     ports:
       - "9091:8080"
+
     env_file:
       - .env
+
     deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+
       resources:
         limits:
           cpus: "0.2"
-          memory: 500M
+          memory: 700M
+        reservations:
+          cpus: "0.2"
+          memory: 256M
+
+      update_config:
+        parallelism: 1
+        delay: 10s
+        order: stop-first

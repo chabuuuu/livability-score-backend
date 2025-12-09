@@ -61,7 +61,7 @@ jobs:
           host: ${{ secrets.SERVER_HOST }}
           username: ${{ secrets.SERVER_USER }}
           key: ${{ secrets.SERVER_SSH_PRIVATE_KEY }}
-          port: 22
+          port: ${{ secrets.SERVER_PORT }}
           script: |
             rm -rf ${{ env.DEPLOY_FOLDER }}/*
 
@@ -71,6 +71,7 @@ jobs:
           host: ${{ secrets.SERVER_HOST }}
           username: ${{ secrets.SERVER_USER }}
           key: ${{ secrets.SERVER_SSH_PRIVATE_KEY }}
+          port: ${{ secrets.SERVER_PORT }}
           source: "./${{ env.SERVICE_FOLDER }}/docker-compose.yml"
           target: ${{ env.DEPLOY_FOLDER }}
 
@@ -79,6 +80,7 @@ jobs:
         with:
           host: ${{ secrets.SERVER_HOST }}
           username: ${{ secrets.SERVER_USER }}
+          port: ${{ secrets.SERVER_PORT }}
           key: ${{ secrets.SERVER_SSH_PRIVATE_KEY }}
           script: |
             # 1. Login Docker trên Server (để Swarm có thể pull image private)

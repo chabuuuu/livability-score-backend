@@ -61,7 +61,7 @@ jobs:
           host: ${{ secrets.SERVER_HOST }}
           username: ${{ secrets.SERVER_USER }}
           key: ${{ secrets.SERVER_SSH_PRIVATE_KEY }}
-          port: 22
+          port: ${{ secrets.SERVER_PORT }}
           script: |
             rm -rf ${{ env.DEPLOY_FOLDER }}/*
 
@@ -72,6 +72,7 @@ jobs:
           username: ${{ secrets.SERVER_USER }}
           key: ${{ secrets.SERVER_SSH_PRIVATE_KEY }}
           source: "./${{ env.SERVICE_FOLDER }}/docker-compose.yml"
+          port: ${{ secrets.SERVER_PORT }}
           target: ${{ env.DEPLOY_FOLDER }}
 
       - name: Deploy to Docker Swarm

@@ -2,15 +2,26 @@ version: "3.9"
 
 services:
   kltn-property-service-be:
-    container_name: kltn-property-service-be
-    image: kltn-property-service-be:${IMAGE_VERSION}
-    restart: unless-stopped
+    image: ghcr.io/${GITHUB_REPOSITORY_OWNER_LOWERCASE}/kltn-property-service-be:${IMAGE_VERSION}
     ports:
       - "9092:8080"
     env_file:
       - .env
     deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+
       resources:
         limits:
           cpus: "0.2"
           memory: 700M
+
+        reservations:
+          cpus: "0.2"
+          memory: 356M
+
+      update_config:
+        parallelism: 1
+        delay: 10s
+        order: stop-first

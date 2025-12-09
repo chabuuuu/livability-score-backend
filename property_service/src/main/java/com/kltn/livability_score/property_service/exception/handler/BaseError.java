@@ -7,7 +7,7 @@ import org.springframework.http.HttpStatus;
 import com.kltn.livability_score.property_service.exception.type.ErrorCodeType;
 import com.kltn.livability_score.property_service.exception.GeneralErrorCode;
 
-public class BaseError extends Exception {
+public class BaseError extends RuntimeException {
 
     private static final long serialVersionUID = 4127513561428645333L;
 

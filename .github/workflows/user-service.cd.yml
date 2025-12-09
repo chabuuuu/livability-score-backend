@@ -5,6 +5,7 @@ env:
   SERVICE_IMAGE: kltn-user-service-be
   DEPLOY_FOLDER: /home/gha-runner/kltn/backend/user_service
   ENV_FILE_PATH: /home/gha-runner/kltn/backend/user_service/env_file/.env
+  SERVICE_FOLDER: media_service
 
 on:
   push:
@@ -54,15 +55,24 @@ jobs:
       - name: Checkout code (để lấy file docker-compose.yml)
         uses: actions/checkout@v3
 
-      - name: Copy docker compose file to server
+      - name: Clean old docker compose script and old env file
+        uses: appleboy/ssh-action@v1.1.0
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SERVER_SSH_PRIVATE_KEY }}
+          port: 22
+          script: |
+            rm -rf ${{ env.DEPLOY_FOLDER }}/*
+
+      - name: Copy new docker compose script to server
         uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.SERVER_HOST }}
           username: ${{ secrets.SERVER_USER }}
           key: ${{ secrets.SERVER_SSH_PRIVATE_KEY }}
-          source: "./user_service/docker-compose.yml"
+          source: "./${{ env.SERVICE_FOLDER }}/docker-compose.yml"
           target: ${{ env.DEPLOY_FOLDER }}
-          strip_components: 1 # Loại bỏ folder cha user_service khi copy
 
       - name: Deploy to Docker Swarm
         uses: appleboy/ssh-action@v1.1.0

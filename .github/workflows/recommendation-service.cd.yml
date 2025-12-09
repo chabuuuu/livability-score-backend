@@ -3,9 +3,10 @@ name: "[STAGING] CI & CD KLTN Recommendation Service [BE] (Swarm)"
 env:
   SERVICE_NAME: kltn_recommendation_stack
   SERVICE_IMAGE: kltn-recommendation-service-be
-  DEPLOY_FOLDER: /home/gha-runner/kltn/backend/recommendation_service
+  DEPLOY_FOLDER: /home/gha-runner/kltn/backend/recommendation_service/source
   ENV_FILE_PATH: /home/gha-runner/kltn/backend/recommendation_service/env_file/.env
   SERVICE_FOLDER: recommendation_service
+  DOCKER_COMPOSE_PATH: ./recommendation_service/docker-compose.yml
 
 on:
   push:
@@ -80,8 +81,8 @@ jobs:
         with:
           host: ${{ secrets.SERVER_HOST }}
           username: ${{ secrets.SERVER_USER }}
-          port: ${{ secrets.SERVER_PORT }}
           key: ${{ secrets.SERVER_SSH_PRIVATE_KEY }}
+          port: ${{ secrets.SERVER_PORT }}
           script: |
             # 1. Login Docker trên Server (để Swarm có thể pull image private)
             echo ${{ secrets.GITHUB_TOKEN }} | docker login ghcr.io -u ${{ github.actor }} --password-stdin
@@ -100,7 +101,7 @@ jobs:
 
             # 4. Deploy Stack
             # --with-registry-auth: Gửi thông tin login xuống các Worker node để chúng pull được image
-            docker stack deploy --with-registry-auth -c docker-compose.yml ${{ env.SERVICE_NAME }}
+            docker stack deploy --with-registry-auth -c ${{ env.DOCKER_COMPOSE_PATH }} ${{ env.SERVICE_NAME }}
 
             # (Optional) Cleanup image cũ để tiết kiệm ổ cứng (prune)
             docker image prune -af

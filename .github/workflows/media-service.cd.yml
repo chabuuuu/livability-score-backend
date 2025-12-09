@@ -3,9 +3,10 @@ name: "[STAGING] CI & CD KLTN Media Service [BE] (Swarm)"
 env:
   SERVICE_NAME: kltn_media_stack
   SERVICE_IMAGE: kltn-media-service-be
-  DEPLOY_FOLDER: /home/gha-runner/kltn/backend/media_service
+  DEPLOY_FOLDER: /home/gha-runner/kltn/backend/media_service/source
   ENV_FILE_PATH: /home/gha-runner/kltn/backend/media_service/env_file/.env
   SERVICE_FOLDER: media_service
+  DOCKER_COMPOSE_PATH: ./media_service/docker-compose.yml
 
 on:
   push:
@@ -71,8 +72,8 @@ jobs:
           host: ${{ secrets.SERVER_HOST }}
           username: ${{ secrets.SERVER_USER }}
           key: ${{ secrets.SERVER_SSH_PRIVATE_KEY }}
-          source: "./${{ env.SERVICE_FOLDER }}/docker-compose.yml"
           port: ${{ secrets.SERVER_PORT }}
+          source: "./${{ env.SERVICE_FOLDER }}/docker-compose.yml"
           target: ${{ env.DEPLOY_FOLDER }}
 
       - name: Deploy to Docker Swarm
@@ -81,6 +82,7 @@ jobs:
           host: ${{ secrets.SERVER_HOST }}
           username: ${{ secrets.SERVER_USER }}
           key: ${{ secrets.SERVER_SSH_PRIVATE_KEY }}
+          port: ${{ secrets.SERVER_PORT }}
           script: |
             # 1. Login Docker trên Server (để Swarm có thể pull image private)
             echo ${{ secrets.GITHUB_TOKEN }} | docker login ghcr.io -u ${{ github.actor }} --password-stdin
@@ -99,7 +101,7 @@ jobs:
 
             # 4. Deploy Stack
             # --with-registry-auth: Gửi thông tin login xuống các Worker node để chúng pull được image
-            docker stack deploy --with-registry-auth -c docker-compose.yml ${{ env.SERVICE_NAME }}
+            docker stack deploy --with-registry-auth -c ${{ env.DOCKER_COMPOSE_PATH }} ${{ env.SERVICE_NAME }}
 
             # (Optional) Cleanup image cũ để tiết kiệm ổ cứng (prune)
             docker image prune -af

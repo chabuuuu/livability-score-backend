@@ -1,6 +1,7 @@
 package com.kltn.livability_score.user_service.controllers;
 
 import com.kltn.livability_score.user_service.annotations.ApiErrorResponse;
+import com.kltn.livability_score.user_service.exception.user.UserForgotPasswordException;
 import com.kltn.livability_score.user_service.exception.user.UserLoginException;
 import com.kltn.livability_score.user_service.exception.user.UserProfileException;
 import com.kltn.livability_score.user_service.exception.user.UserRegisterException;
@@ -13,6 +14,7 @@ import com.kltn.livability_score.user_service.model.user.request.AdminApproveSel
 import com.kltn.livability_score.user_service.model.user.request.UserLoginRequest;
 import com.kltn.livability_score.user_service.model.user.request.UserProfileUpdateRequest;
 import com.kltn.livability_score.user_service.model.user.request.UserRegisterRequest;
+import com.kltn.livability_score.user_service.model.user.request.UserResetPasswordRequest;
 import com.kltn.livability_score.user_service.model.user.request.UserVerifyEmailRequest;
 import com.kltn.livability_score.user_service.model.user.response.UserGetMeResponse;
 import com.kltn.livability_score.user_service.model.user.response.UserLoginResponse;
@@ -151,5 +153,28 @@ public class UserController {
 
     UserProfileResponse response = userService.reviewSellerRequest(userId, request);
     return ResponseEntityGenerator.okFormat(response);
+  }
+
+  @PostMapping("/forgot-password/{email}")
+  @Operation(summary = "User forgot password - send OTP to email")
+  @ApiErrorResponse(errorEnum = UserForgotPasswordException.class)
+  public ResponseEntity<ResponseVO<String>> sendForgotPasswordOtp(
+      @PathVariable String email) {
+
+    userService.sentForgotPasswordOtp(email);
+
+    return ResponseEntityGenerator.okFormat("OTP sent to email successfully");
+  }
+
+  @PostMapping("/forgot-password/verify")
+  @Operation(summary = "User forgot password - verify OTP and reset password")
+  @ApiErrorResponse(errorEnum = UserForgotPasswordException.class, validateSchema = UserResetPasswordRequest.class)
+  public ResponseEntity<ResponseVO<String>> verifyAndResetPassword(
+      @Valid @RequestBody UserResetPasswordRequest userResetPasswordRequest
+  ) {
+
+    userService.resetPassword(userResetPasswordRequest);
+
+    return ResponseEntityGenerator.okFormat("Password reset successfully");
   }
 }

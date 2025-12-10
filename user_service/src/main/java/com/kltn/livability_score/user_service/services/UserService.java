@@ -5,6 +5,7 @@ import com.kltn.livability_score.user_service.model.user.request.AdminApproveSel
 import com.kltn.livability_score.user_service.model.user.request.UserLoginRequest;
 import com.kltn.livability_score.user_service.model.user.request.UserProfileUpdateRequest;
 import com.kltn.livability_score.user_service.model.user.request.UserRegisterRequest;
+import com.kltn.livability_score.user_service.model.user.request.UserResetPasswordRequest;
 import com.kltn.livability_score.user_service.model.user.request.UserVerifyEmailRequest;
 import com.kltn.livability_score.user_service.model.user.response.UserGetMeResponse;
 import com.kltn.livability_score.user_service.model.user.response.UserLoginResponse;
@@ -31,4 +32,8 @@ public interface UserService {
   UserProfileResponse getUserProfileById(Long userId);
 
   UserProfileResponse reviewSellerRequest(Long userId, AdminApproveSellerRequest request);
+
+  void sentForgotPasswordOtp(String email);
+
+  void resetPassword(UserResetPasswordRequest userResetPasswordRequest);
 }

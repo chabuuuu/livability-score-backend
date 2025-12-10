@@ -100,8 +100,7 @@ jobs:
             cp ${{ env.ENV_FILE_PATH }} ${{ env.DEPLOY_FOLDER }}/${{ env.SERVICE_FOLDER }}
 
             # 4. Deploy Stack
-            # --with-registry-auth: Gửi thông tin login xuống các Worker node để chúng pull được image
-            docker stack deploy --with-registry-auth -c ${{ env.DOCKER_COMPOSE_PATH }} ${{ env.SERVICE_NAME }}
+            docker stack deploy --resolve-image=always -c ${{ env.DOCKER_COMPOSE_PATH }} ${{ env.SERVICE_NAME }}
 
             # (Optional) Cleanup image cũ để tiết kiệm ổ cứng (prune)
             docker image prune -af

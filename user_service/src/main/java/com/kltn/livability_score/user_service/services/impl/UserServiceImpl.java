@@ -2,11 +2,13 @@ package com.kltn.livability_score.user_service.services.impl;
 
 import com.kltn.livability_score.user_service.entity.UserEntity;
 import com.kltn.livability_score.user_service.entity.UserProfileEntity;
+import com.kltn.livability_score.user_service.entity.caching.ForgotPasswordCacheEntity;
 import com.kltn.livability_score.user_service.entity.caching.RegisterUserCacheEntity;
 import com.kltn.livability_score.user_service.enums.RoleTypeEnum;
 import com.kltn.livability_score.user_service.enums.SellerApprovalStatus;
 import com.kltn.livability_score.user_service.exception.GeneralErrorCode;
 import com.kltn.livability_score.user_service.exception.handler.BaseError;
+import com.kltn.livability_score.user_service.exception.user.UserForgotPasswordException;
 import com.kltn.livability_score.user_service.exception.user.UserLoginException;
 import com.kltn.livability_score.user_service.exception.user.UserProfileException;
 import com.kltn.livability_score.user_service.exception.user.UserRegisterException;
@@ -20,6 +22,7 @@ import com.kltn.livability_score.user_service.model.user.request.AdminApproveSel
 import com.kltn.livability_score.user_service.model.user.request.UserLoginRequest;
 import com.kltn.livability_score.user_service.model.user.request.UserProfileUpdateRequest;
 import com.kltn.livability_score.user_service.model.user.request.UserRegisterRequest;
+import com.kltn.livability_score.user_service.model.user.request.UserResetPasswordRequest;
 import com.kltn.livability_score.user_service.model.user.request.UserVerifyEmailRequest;
 import com.kltn.livability_score.user_service.model.user.response.UserGetMeResponse;
 import com.kltn.livability_score.user_service.model.user.response.UserLoginResponse;
@@ -27,6 +30,7 @@ import com.kltn.livability_score.user_service.model.user.response.UserProfileRes
 import com.kltn.livability_score.user_service.repository.PreferencePresetRepository;
 import com.kltn.livability_score.user_service.repository.UserProfileRepository;
 import com.kltn.livability_score.user_service.repository.UserRepository;
+import com.kltn.livability_score.user_service.repository.caching.ForgotPasswordCacheRepository;
 import com.kltn.livability_score.user_service.repository.caching.RegisterUserCacheRepository;
 import com.kltn.livability_score.user_service.services.EmailService;
 import com.kltn.livability_score.user_service.services.UserService;
@@ -55,6 +59,7 @@ public class UserServiceImpl implements UserService {
   private final UserProfileMapper userProfileMapper;
   private final UserProfileRepository userProfileRepository;
   private final PreferencePresetRepository presetRepository;
+  private final ForgotPasswordCacheRepository forgotPasswordCacheRepository;
 
   @Override
   @Transactional(readOnly = true)
@@ -113,6 +118,66 @@ public class UserServiceImpl implements UserService {
     // 5. Lưu entity Profile và trả về
     UserProfileEntity savedProfile = userProfileRepository.save(profile); // Lưu entity UserProfile
     return userProfileMapper.toResponse(savedProfile);
+  }
+
+  @Override
+  public void sentForgotPasswordOtp(String email) {
+    // Check xem otp trong cache đã hết hạn chưa
+    ForgotPasswordCacheEntity existsOtp = forgotPasswordCacheRepository.findById(email)
+        .orElse(null);
+    if (existsOtp != null) {
+      throw new BaseError(UserForgotPasswordException.USER_FORGOT_PASSWORD_CoolDown);
+    }
+
+    // Get the user from DB
+    UserEntity user = userRepository.findByEmailAndDeleteAtIsNull(email)
+        .orElseThrow(
+            () -> new BaseError(UserForgotPasswordException.USER_FORGOT_PASSWORD_UserNotFound));
+
+    // Generate session id with UUID
+    String otp = OtpUtil.generateOtp();
+
+    ForgotPasswordCacheEntity forgotPasswordCacheEntity = new ForgotPasswordCacheEntity();
+    forgotPasswordCacheEntity.setOtp(otp);
+    forgotPasswordCacheEntity.setEmail(email);
+
+    // Lưu vào cache để chờ được verify
+    forgotPasswordCacheRepository.save(forgotPasswordCacheEntity);
+
+    // Gửi email đến user
+    String recipientName = user.getUserProfile().getFullName();
+
+    emailService.sendForgotPasswordOtpEmail(email, recipientName, otp);
+  }
+
+  @Override
+  public void resetPassword(UserResetPasswordRequest userResetPasswordRequest) {
+
+    // Lấy OTP từ cache
+    ForgotPasswordCacheEntity forgotPasswordCacheEntity = forgotPasswordCacheRepository.findById(
+            userResetPasswordRequest.getEmail())
+        .orElse(null);
+    if (forgotPasswordCacheEntity == null) {
+      throw new BaseError(UserForgotPasswordException.USER_FORGOT_PASSWORD_InvalidOtp);
+    }
+
+    // So sánh otp nhập vào với otp trong cache
+    if (!userResetPasswordRequest.getOtp().equals(forgotPasswordCacheEntity.getOtp())) {
+      throw new BaseError(UserForgotPasswordException.USER_FORGOT_PASSWORD_InvalidOtp);
+    }
+
+    // Lấy user từ DB
+    UserEntity user = userRepository.findByEmailAndDeleteAtIsNull(
+            userResetPasswordRequest.getEmail())
+        .orElseThrow(
+            () -> new BaseError(UserForgotPasswordException.USER_FORGOT_PASSWORD_UserNotFound));
+
+    // Hash mật khẩu mới
+    String hashedPassword = PasswordUtil.hashPassword(userResetPasswordRequest.getNewPassword());
+    user.setPasswordHash(hashedPassword);
+
+    // Cập nhật mật khẩu mới cho user
+    userRepository.save(user);
   }
 
   @Override

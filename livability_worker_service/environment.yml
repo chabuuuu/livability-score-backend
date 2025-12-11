@@ -1,0 +1,12 @@
+name: real-estate-livability-worker-service
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.10
+  - sqlalchemy
+  - psycopg2 # Conda quản lý thư viện C binary tốt hơn cho Postgres
+  - geoalchemy2
+  - redis-py
+  - pydantic
+  - pip

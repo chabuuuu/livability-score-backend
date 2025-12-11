@@ -2,7 +2,7 @@ name: "[STAGING] CI & CD KLTN Media Service [BE] (Swarm)"
 
 env:
   SERVICE_NAME: kltn_media_stack
-  SERVICE_IMAGE: kltn-media-service-be
+  SERVICE_IMAGE: media-service-be
   DEPLOY_FOLDER: /home/gha-runner/kltn/backend/media_service/source
   ENV_FILE_PATH: /home/gha-runner/kltn/backend/media_service/env_file/.env
   SERVICE_FOLDER: media_service

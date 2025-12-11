@@ -2,7 +2,7 @@ name: "[STAGING] CI & CD KLTN User Service [BE] (Swarm)"
 
 env:
   SERVICE_NAME: kltn_user_stack
-  SERVICE_IMAGE: kltn-user-service-be
+  SERVICE_IMAGE: user-service-be
   DEPLOY_FOLDER: /home/gha-runner/kltn/backend/user_service/source
   ENV_FILE_PATH: /home/gha-runner/kltn/backend/user_service/env_file/.env
   SERVICE_FOLDER: user_service

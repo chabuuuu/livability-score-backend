@@ -2,7 +2,7 @@ version: "3.9"
 
 services:
   kltn-user-service-be:
-    image: ghcr.io/${GITHUB_REPOSITORY_OWNER_LOWERCASE}/kltn-user-service-be:${IMAGE_VERSION}
+    image: ghcr.io/${GITHUB_REPOSITORY_OWNER_LOWERCASE}/user-service-be:${IMAGE_VERSION}
 
     ports:
       - "9091:8080"

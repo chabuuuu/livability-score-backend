@@ -2,7 +2,7 @@ name: "[STAGING] CI & CD KLTN Recommendation Service [BE] (Swarm)"
 
 env:
   SERVICE_NAME: kltn_recommendation_stack
-  SERVICE_IMAGE: kltn-recommendation-service-be
+  SERVICE_IMAGE: recommendation-service-be
   DEPLOY_FOLDER: /home/gha-runner/kltn/backend/recommendation_service/source
   ENV_FILE_PATH: /home/gha-runner/kltn/backend/recommendation_service/env_file/.env
   SERVICE_FOLDER: recommendation_service

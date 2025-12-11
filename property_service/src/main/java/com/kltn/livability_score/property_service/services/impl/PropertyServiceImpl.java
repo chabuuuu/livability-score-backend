@@ -14,6 +14,7 @@ import com.kltn.livability_score.property_service.model.property.request.Propert
 import com.kltn.livability_score.property_service.model.property.response.PropertyDetailResponse;
 import com.kltn.livability_score.property_service.model.property.response.PropertyMapSummaryResponse;
 import com.kltn.livability_score.property_service.model.specifications.SearchDataDto;
+import com.kltn.livability_score.property_service.publisher.PropertyEventPublisher;
 import com.kltn.livability_score.property_service.repository.PropertyRepository;
 import com.kltn.livability_score.property_service.repository.TagRepository;
 import com.kltn.livability_score.property_service.services.PropertyService;
@@ -41,6 +42,7 @@ public class PropertyServiceImpl implements PropertyService {
   private final TagRepository tagRepository;
   private final PropertyMapper propertyMapper;
   private final StringRedisTemplate redisTemplate;
+  private final PropertyEventPublisher propertyEventPublisher;
 
   @Override
   @SneakyThrows
@@ -58,6 +60,10 @@ public class PropertyServiceImpl implements PropertyService {
     handleTags(entity, request.getTagNames());
 
     PropertyEntity savedEntity = propertyRepository.save(entity);
+
+    // Send event for creating livability score (Async)
+    propertyEventPublisher.publishPropertyUpdateEvent(savedEntity.getId(), "created");
+
     return propertyMapper.toDetailResponse(savedEntity);
   }
 
@@ -69,8 +75,13 @@ public class PropertyServiceImpl implements PropertyService {
     Long currentUserId = session.getUserId();
 
     // Find property owned by the current user
-    PropertyEntity entity = propertyRepository.findByIdAndUserId(propertyId, currentUserId)
-        .orElseThrow(() -> new BaseError(PropertyException.FORBIDDEN_ACCESS));
+    PropertyEntity entity = propertyRepository.findById(propertyId)
+        .orElseThrow(() -> new BaseError(PropertyException.PROPERTY_NOT_FOUND));
+
+    // If role is not ADMIN, check ownership
+    if (!session.getRoles().contains("ADMIN") && !entity.getUserId().equals(currentUserId)) {
+      throw new BaseError(PropertyException.FORBIDDEN_ACCESS);
+    }
 
     // Update entity fields from request
     propertyMapper.updateEntityFromRequest(request, entity);
@@ -83,6 +94,10 @@ public class PropertyServiceImpl implements PropertyService {
     handleTags(entity, request.getTagNames());
 
     PropertyEntity updatedEntity = propertyRepository.save(entity);
+
+    // Send event for update livability score (Async)
+    propertyEventPublisher.publishPropertyUpdateEvent(updatedEntity.getId(), "updated");
+
     return propertyMapper.toDetailResponse(updatedEntity);
   }
 

@@ -1,0 +1,107 @@
+name: "[STAGING] CI & CD KLTN Livability Worker Service [BE] (Swarm)"
+
+env:
+    SERVICE_NAME: kltn_livability_worker_stack
+    SERVICE_IMAGE: kltn-livability-worker-service-be
+    DEPLOY_FOLDER: /home/gha-runner/kltn/backend/livability_worker_service/source
+    ENV_FILE_PATH: /home/gha-runner/kltn/backend/livability_worker_service/env_file/.env
+    SERVICE_FOLDER: livability_worker_service
+    DOCKER_COMPOSE_PATH: ./livability_worker_service/docker-compose.yml
+
+on:
+    push:
+        branches:
+            - staging
+        paths:
+            - "livability_worker_service/**"
+            - ".github/workflows/livability-worker-service.cd.yml"
+
+jobs:
+    build_and_push:
+        runs-on: ubuntu-latest
+        permissions:
+            contents: read
+            packages: write # Cấp quyền ghi vào GHCR
+
+        steps:
+            - name: Checkout code
+              uses: actions/checkout@v3
+
+            - name: Log in to the Container registry
+              uses: docker/login-action@v2
+              with:
+                  registry: ghcr.io
+                  username: ${{ github.actor }}
+                  password: ${{ secrets.GITHUB_TOKEN }}
+
+            - name: Lowercase Repo Owner
+              run: |
+                  echo "REPO_OWNER=${GITHUB_REPOSITORY_OWNER,,}" >> $GITHUB_ENV
+
+            - name: Build and push Docker image
+              uses: docker/build-push-action@v4
+              with:
+                  context: ./livability_worker_service
+                  push: true
+                  # Tag image với cả version cụ thể và tag 'latest' để dễ debug
+                  tags: |
+                      ghcr.io/${{ env.REPO_OWNER }}/${{ env.SERVICE_IMAGE }}:${{ github.ref_name }}-${{ github.sha }}
+                      ghcr.io/${{ env.REPO_OWNER }}/${{ env.SERVICE_IMAGE }}:latest
+
+    deploy_swarm:
+        runs-on: ubuntu-latest
+        needs: build_and_push
+
+        steps:
+            - name: Checkout code (để lấy file docker-compose.yml)
+              uses: actions/checkout@v3
+
+            - name: Clean old docker compose script and old env file
+              uses: appleboy/ssh-action@v1.1.0
+              with:
+                  host: ${{ secrets.SERVER_HOST }}
+                  username: ${{ secrets.SERVER_USER }}
+                  key: ${{ secrets.SERVER_SSH_PRIVATE_KEY }}
+                  port: ${{ secrets.SERVER_PORT }}
+                  script: |
+                      rm -rf ${{ env.DEPLOY_FOLDER }}/*
+
+            - name: Copy new docker compose script to server
+              uses: appleboy/scp-action@v0.1.7
+              with:
+                  host: ${{ secrets.SERVER_HOST }}
+                  username: ${{ secrets.SERVER_USER }}
+                  key: ${{ secrets.SERVER_SSH_PRIVATE_KEY }}
+                  port: ${{ secrets.SERVER_PORT }}
+                  source: "./${{ env.SERVICE_FOLDER }}/docker-compose.yml"
+                  target: ${{ env.DEPLOY_FOLDER }}
+
+            - name: Deploy to Docker Swarm
+              uses: appleboy/ssh-action@v1.1.0
+              with:
+                  host: ${{ secrets.SERVER_HOST }}
+                  username: ${{ secrets.SERVER_USER }}
+                  key: ${{ secrets.SERVER_SSH_PRIVATE_KEY }}
+                  port: ${{ secrets.SERVER_PORT }}
+                  script: |
+                      # 1. Login Docker trên Server (để Swarm có thể pull image private)
+                      echo ${{ secrets.GITHUB_TOKEN }} | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+
+                      # 2. Setup biến môi trường
+                      export GITHUB_REPOSITORY_OWNER_LOWERCASE=$(echo ${{ github.repository_owner }} | tr '[:upper:]' '[:lower:]')
+                      export IMAGE_VERSION=${{ github.ref_name }}-${{ github.sha }}
+
+                      # 3. Di chuyển đến folder chứa .env và docker-compose.yml
+                      cd ${{ env.DEPLOY_FOLDER }}
+
+                      # Copy file .env vào vị trí mong muốn (nếu chưa đúng chỗ)
+                      # Giả sử file .env đã nằm sẵn ở ENV_FILE_PATH và bạn muốn link nó
+                      # docker stack deploy hỗ trợ env_file nhưng file phải nằm cùng chỗ lệnh chạy
+                      cp ${{ env.ENV_FILE_PATH }} ${{ env.DEPLOY_FOLDER }}/${{ env.SERVICE_FOLDER }}
+
+                      # 4. Deploy Stack
+                      # --with-registry-auth: Gửi thông tin login xuống các Worker node để chúng pull được image
+                      docker stack deploy --with-registry-auth -c ${{ env.DOCKER_COMPOSE_PATH }} ${{ env.SERVICE_NAME }}
+
+                      # (Optional) Cleanup image cũ để tiết kiệm ổ cứng (prune)
+                      docker image prune -af

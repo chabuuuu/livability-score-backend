@@ -1,0 +1,14 @@
+pycache
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.env
+.git
+.gitignore
+Dockerfile
+docker-compose.yml
+README.md
+batch_calculate.py

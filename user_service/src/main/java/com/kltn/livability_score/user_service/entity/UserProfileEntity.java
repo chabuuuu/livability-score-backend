@@ -45,6 +45,9 @@ public class UserProfileEntity extends BaseEntity {
   @Column(name = "phone_number", length = 20)
   private String phoneNumber;
 
+  @Column(name = "verified_phone")
+  private Boolean verifiedPhone = false;
+
   @Column(name = "avatar_url", columnDefinition = "text")
   private String avatarUrl;
 

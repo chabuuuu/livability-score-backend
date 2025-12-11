@@ -18,6 +18,24 @@ public enum UserRoleException implements ErrorCodeType {
       "Your request is already pending approval",
       HttpStatus.BAD_REQUEST),
 
+  PHONE_NOT_VERIFIED("PHONE_NOT_VERIFIED",
+      "You must verify your phone number before requesting seller role",
+      HttpStatus.BAD_REQUEST),
+
+  /**
+   * Old password provided does not match the stored password.
+   */
+  PASSWORD_INCORRECT("PASSWORD_INCORRECT",
+      "The old password is not correct",
+      HttpStatus.BAD_REQUEST),
+
+  /**
+   * New password cannot be the same as the old password.
+   */
+  PASSWORD_SAME_AS_OLD("PASSWORD_SAME_AS_OLD",
+      "New password cannot be the same as the old password",
+      HttpStatus.BAD_REQUEST),
+
   /**
    * Admin is trying to review a request that is not in PENDING state.
    */

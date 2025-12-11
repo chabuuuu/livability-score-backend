@@ -2,7 +2,7 @@ name: "[STAGING] CI & CD KLTN Livability Worker Service [BE] (Swarm)"
 
 env:
     SERVICE_NAME: kltn_livability_worker_stack
-    SERVICE_IMAGE: kltn-livability-worker-service-be
+    SERVICE_IMAGE: livability-worker-service-be
     DEPLOY_FOLDER: /home/gha-runner/kltn/backend/livability_worker_service/source
     ENV_FILE_PATH: /home/gha-runner/kltn/backend/livability_worker_service/env_file/.env
     SERVICE_FOLDER: livability_worker_service

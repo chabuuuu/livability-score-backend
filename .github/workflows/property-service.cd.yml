@@ -2,7 +2,7 @@ name: "[STAGING] CI & CD KLTN Property Service [BE] (Swarm)"
 
 env:
   SERVICE_NAME: kltn_property_stack
-  SERVICE_IMAGE: kltn-property-service-be
+  SERVICE_IMAGE: property-service-be
   DEPLOY_FOLDER: /home/gha-runner/kltn/backend/property_service/source
   ENV_FILE_PATH: /home/gha-runner/kltn/backend/property_service/env_file/.env
   SERVICE_FOLDER: property_service

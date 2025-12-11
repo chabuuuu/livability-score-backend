@@ -7,15 +7,19 @@ import com.kltn.livability_score.user_service.exception.user.UserProfileExceptio
 import com.kltn.livability_score.user_service.exception.user.UserRegisterException;
 import com.kltn.livability_score.user_service.exception.user.UserRoleException;
 import com.kltn.livability_score.user_service.exception.user.UserVerifyEmailException;
+import com.kltn.livability_score.user_service.exception.user.UserVerifyPhoneException;
 import com.kltn.livability_score.user_service.model.base_format.response.ResponsePagingVO;
 import com.kltn.livability_score.user_service.model.base_format.response.ResponseVO;
 import com.kltn.livability_score.user_service.model.specifications.SearchDataDto;
 import com.kltn.livability_score.user_service.model.user.request.AdminApproveSellerRequest;
+import com.kltn.livability_score.user_service.model.user.request.UserChangePasswordRequest;
 import com.kltn.livability_score.user_service.model.user.request.UserLoginRequest;
 import com.kltn.livability_score.user_service.model.user.request.UserProfileUpdateRequest;
 import com.kltn.livability_score.user_service.model.user.request.UserRegisterRequest;
 import com.kltn.livability_score.user_service.model.user.request.UserResetPasswordRequest;
+import com.kltn.livability_score.user_service.model.user.request.UserSendOtpVerifyPhoneRequest;
 import com.kltn.livability_score.user_service.model.user.request.UserVerifyEmailRequest;
+import com.kltn.livability_score.user_service.model.user.request.UserVerifyPhoneRequest;
 import com.kltn.livability_score.user_service.model.user.response.UserGetMeResponse;
 import com.kltn.livability_score.user_service.model.user.response.UserLoginResponse;
 import com.kltn.livability_score.user_service.model.user.response.UserProfileResponse;
@@ -176,5 +180,40 @@ public class UserController {
     userService.resetPassword(userResetPasswordRequest);
 
     return ResponseEntityGenerator.okFormat("Password reset successfully");
+  }
+
+  @PostMapping("/verify-phone/send-otp")
+  @Operation(summary = "Send OTP to verify phone number")
+  @ApiErrorResponse(errorEnum = UserVerifyPhoneException.class, validateSchema = UserSendOtpVerifyPhoneRequest.class)
+  public ResponseEntity<ResponseVO<String>> sendOtpVerifyPhone(
+      @Valid @RequestBody UserSendOtpVerifyPhoneRequest userSendOtpVerifyPhoneRequest
+  ) {
+
+    userService.sendOtpVerifyPhone(userSendOtpVerifyPhoneRequest);
+
+    return ResponseEntityGenerator.okFormat("OTP sent to phone successfully");
+  }
+
+  @PostMapping("/verify-phone")
+  @Operation(summary = "Verify phone number with OTP")
+  @ApiErrorResponse(errorEnum = UserVerifyPhoneException.class, validateSchema = UserVerifyPhoneRequest.class)
+  public ResponseEntity<ResponseVO<String>> verifyAndResetPassword(
+      @Valid @RequestBody UserVerifyPhoneRequest userVerifyPhoneRequest
+  ) {
+
+    userService.verifyPhoneOtp(userVerifyPhoneRequest);
+
+    return ResponseEntityGenerator.okFormat("Phone number verified successfully");
+  }
+
+  @PutMapping("/change-password")
+  @Operation(summary = "Change current user's password")
+  @ApiErrorResponse(errorEnum = UserRoleException.class)
+  public ResponseEntity<ResponseVO<String>> changePassword(
+      @Valid @RequestBody UserChangePasswordRequest request) {
+
+    userService.changePassword(request);
+
+    return ResponseEntityGenerator.okFormat("Password changed successfully");
   }
 }

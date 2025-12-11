@@ -2,11 +2,14 @@ package com.kltn.livability_score.user_service.services;
 
 import com.kltn.livability_score.user_service.model.specifications.SearchDataDto;
 import com.kltn.livability_score.user_service.model.user.request.AdminApproveSellerRequest;
+import com.kltn.livability_score.user_service.model.user.request.UserChangePasswordRequest;
 import com.kltn.livability_score.user_service.model.user.request.UserLoginRequest;
 import com.kltn.livability_score.user_service.model.user.request.UserProfileUpdateRequest;
 import com.kltn.livability_score.user_service.model.user.request.UserRegisterRequest;
 import com.kltn.livability_score.user_service.model.user.request.UserResetPasswordRequest;
+import com.kltn.livability_score.user_service.model.user.request.UserSendOtpVerifyPhoneRequest;
 import com.kltn.livability_score.user_service.model.user.request.UserVerifyEmailRequest;
+import com.kltn.livability_score.user_service.model.user.request.UserVerifyPhoneRequest;
 import com.kltn.livability_score.user_service.model.user.response.UserGetMeResponse;
 import com.kltn.livability_score.user_service.model.user.response.UserLoginResponse;
 import com.kltn.livability_score.user_service.model.user.response.UserProfileResponse;
@@ -36,4 +39,10 @@ public interface UserService {
   void sentForgotPasswordOtp(String email);
 
   void resetPassword(UserResetPasswordRequest userResetPasswordRequest);
+
+  void sendOtpVerifyPhone(UserSendOtpVerifyPhoneRequest userSendOtpVerifyPhoneRequest);
+
+  void verifyPhoneOtp(UserVerifyPhoneRequest userVerifyPhoneRequest);
+
+  void changePassword(UserChangePasswordRequest request);
 }

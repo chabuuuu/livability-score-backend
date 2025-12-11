@@ -2,7 +2,7 @@ version: "3.9"
 
 services:
   kltn-property-service-be:
-    image: ghcr.io/${GITHUB_REPOSITORY_OWNER_LOWERCASE}/kltn-property-service-be:${IMAGE_VERSION}
+    image: ghcr.io/${GITHUB_REPOSITORY_OWNER_LOWERCASE}/property-service-be:${IMAGE_VERSION}
     ports:
       - "9092:8080"
     env_file:

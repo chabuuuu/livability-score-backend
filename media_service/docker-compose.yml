@@ -2,7 +2,7 @@ version: "3.9"
 
 services:
   kltn-media-service-be:
-    image: ghcr.io/${GITHUB_REPOSITORY_OWNER_LOWERCASE}/kltn-media-service-be:${IMAGE_VERSION}
+    image: ghcr.io/${GITHUB_REPOSITORY_OWNER_LOWERCASE}/media-service-be:${IMAGE_VERSION}
     ports:
       - "9093:8080"
     env_file:

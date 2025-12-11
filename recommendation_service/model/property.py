@@ -2,7 +2,7 @@ from sqlalchemy import Column, Integer, String, Numeric, Text, BigInteger, JSON,
 from geoalchemy2 import Geometry
 import datetime
 
-from config.database_config import Base
+from config.property_db_config import Base
 
 class Property(Base):
     __tablename__ = "properties"

@@ -13,11 +13,10 @@ import org.springframework.stereotype.Component;
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
-@RedisHash(value = "ForgotPasswordCache", timeToLive = 900) // 15 minutes
-public class ForgotPasswordCacheEntity {
+@RedisHash(value = "VerifyPhoneCache", timeToLive = 900) // 15 minutes
+public class VerifyPhoneCacheEntity {
 
   @Id
-  private String email;
+  private String phoneNumber;
   private String otp;
-
 }

@@ -4,6 +4,7 @@ import com.kltn.livability_score.user_service.entity.UserEntity;
 import com.kltn.livability_score.user_service.entity.UserProfileEntity;
 import com.kltn.livability_score.user_service.entity.caching.ForgotPasswordCacheEntity;
 import com.kltn.livability_score.user_service.entity.caching.RegisterUserCacheEntity;
+import com.kltn.livability_score.user_service.entity.caching.VerifyPhoneCacheEntity;
 import com.kltn.livability_score.user_service.enums.RoleTypeEnum;
 import com.kltn.livability_score.user_service.enums.SellerApprovalStatus;
 import com.kltn.livability_score.user_service.exception.GeneralErrorCode;
@@ -14,16 +15,21 @@ import com.kltn.livability_score.user_service.exception.user.UserProfileExceptio
 import com.kltn.livability_score.user_service.exception.user.UserRegisterException;
 import com.kltn.livability_score.user_service.exception.user.UserRoleException;
 import com.kltn.livability_score.user_service.exception.user.UserVerifyEmailException;
+import com.kltn.livability_score.user_service.exception.user.UserVerifyPhoneException;
 import com.kltn.livability_score.user_service.mapper.UserMapper;
 import com.kltn.livability_score.user_service.mapper.UserProfileMapper;
 import com.kltn.livability_score.user_service.model.jwt.vo.JwtTokenVo;
+import com.kltn.livability_score.user_service.model.sms.request.SmsSendRequest;
 import com.kltn.livability_score.user_service.model.specifications.SearchDataDto;
 import com.kltn.livability_score.user_service.model.user.request.AdminApproveSellerRequest;
+import com.kltn.livability_score.user_service.model.user.request.UserChangePasswordRequest;
 import com.kltn.livability_score.user_service.model.user.request.UserLoginRequest;
 import com.kltn.livability_score.user_service.model.user.request.UserProfileUpdateRequest;
 import com.kltn.livability_score.user_service.model.user.request.UserRegisterRequest;
 import com.kltn.livability_score.user_service.model.user.request.UserResetPasswordRequest;
+import com.kltn.livability_score.user_service.model.user.request.UserSendOtpVerifyPhoneRequest;
 import com.kltn.livability_score.user_service.model.user.request.UserVerifyEmailRequest;
+import com.kltn.livability_score.user_service.model.user.request.UserVerifyPhoneRequest;
 import com.kltn.livability_score.user_service.model.user.response.UserGetMeResponse;
 import com.kltn.livability_score.user_service.model.user.response.UserLoginResponse;
 import com.kltn.livability_score.user_service.model.user.response.UserProfileResponse;
@@ -32,7 +38,9 @@ import com.kltn.livability_score.user_service.repository.UserProfileRepository;
 import com.kltn.livability_score.user_service.repository.UserRepository;
 import com.kltn.livability_score.user_service.repository.caching.ForgotPasswordCacheRepository;
 import com.kltn.livability_score.user_service.repository.caching.RegisterUserCacheRepository;
+import com.kltn.livability_score.user_service.repository.caching.VerifyPhoneCacheRepository;
 import com.kltn.livability_score.user_service.services.EmailService;
+import com.kltn.livability_score.user_service.services.SmsService;
 import com.kltn.livability_score.user_service.services.UserService;
 import com.kltn.livability_score.user_service.utils.OtpUtil;
 import com.kltn.livability_score.user_service.utils.PasswordUtil;
@@ -60,6 +68,8 @@ public class UserServiceImpl implements UserService {
   private final UserProfileRepository userProfileRepository;
   private final PreferencePresetRepository presetRepository;
   private final ForgotPasswordCacheRepository forgotPasswordCacheRepository;
+  private final VerifyPhoneCacheRepository verifyPhoneCacheRepository;
+  private final SmsService smsService;
 
   @Override
   @Transactional(readOnly = true)
@@ -181,6 +191,128 @@ public class UserServiceImpl implements UserService {
   }
 
   @Override
+  public void sendOtpVerifyPhone(UserSendOtpVerifyPhoneRequest userSendOtpVerifyPhoneRequest) {
+
+    String phoneNumber = userSendOtpVerifyPhoneRequest.getPhoneNumber();
+
+    // Check xem otp trong cache đã hết hạn chưa
+    VerifyPhoneCacheEntity existsOtp = verifyPhoneCacheRepository.findById(phoneNumber)
+        .orElse(null);
+    if (existsOtp != null) {
+      throw new BaseError(UserVerifyPhoneException.USER_VERIFY_PHONE_CoolDown);
+    }
+
+    // Get current logged in user
+    JwtTokenVo session = SecurityUtil.getSession();
+    Long currentUserId = session.getUserId();
+
+    // Validate that the phone number belongs to the current user
+
+    // Convert phone number to standard format (+84xxx -> 0xxx)
+    String formattedPhoneNumber = "0" + phoneNumber.substring(3);
+
+    UserProfileEntity profile = findProfileByIdOrThrow(currentUserId);
+    if (!formattedPhoneNumber.equals(profile.getPhoneNumber())) {
+      throw new BaseError(UserVerifyPhoneException.USER_VERIFY_PHONE_NotOwnPhone);
+    }
+
+    // Validate that the user has not already verified this phone
+    if (Boolean.TRUE.equals(profile.getVerifiedPhone())) {
+      throw new BaseError(UserVerifyPhoneException.USER_VERIFY_PHONE_Verified);
+    }
+
+    // Generate OTP
+    String otp = OtpUtil.generateOtp();
+
+    // Sent OTP
+    SmsSendRequest smsSendRequest = new SmsSendRequest();
+    smsSendRequest.setPhoneNumbers(List.of(phoneNumber));
+    smsSendRequest.setMessage("Your OTP to verify phone number is: " + otp);
+
+    try {
+      smsService.sendSms(smsSendRequest);
+    } catch (Exception e) {
+      throw new BaseError(UserVerifyPhoneException.USER_VERIFY_PHONE_SendSmsFailed);
+    }
+
+    VerifyPhoneCacheEntity verifyPhoneCacheEntity = new VerifyPhoneCacheEntity();
+    verifyPhoneCacheEntity.setPhoneNumber(phoneNumber);
+    verifyPhoneCacheEntity.setOtp(otp);
+
+    // Lưu vào cache để chờ được verify
+    verifyPhoneCacheRepository.save(verifyPhoneCacheEntity);
+  }
+
+  @Override
+  public void verifyPhoneOtp(UserVerifyPhoneRequest userVerifyPhoneRequest) {
+    String phoneNumber = userVerifyPhoneRequest.getPhoneNumber();
+    String otp = userVerifyPhoneRequest.getOtp();
+
+    // Convert phone number to standard format (+84xxx -> 0xxx)
+    String formattedPhoneNumber = "0" + phoneNumber.substring(3);
+
+    // Lấy OTP từ cache
+    VerifyPhoneCacheEntity verifyPhoneCacheEntity = verifyPhoneCacheRepository.findById(
+            phoneNumber)
+        .orElse(null);
+    if (verifyPhoneCacheEntity == null) {
+      throw new BaseError(UserVerifyPhoneException.USER_VERIFY_PHONE_InvalidOtp);
+    }
+
+    // So sánh otp nhập vào với otp trong cache
+    if (!otp.equals(verifyPhoneCacheEntity.getOtp())) {
+      throw new BaseError(UserVerifyPhoneException.USER_VERIFY_PHONE_InvalidOtp);
+    }
+
+    // Get current logged in user
+    JwtTokenVo session = SecurityUtil.getSession();
+    Long currentUserId = session.getUserId();
+
+    // Validate that the phone number belongs to the current user
+    UserProfileEntity profile = findProfileByIdOrThrow(currentUserId);
+    if (!formattedPhoneNumber.equals(profile.getPhoneNumber())) {
+      throw new BaseError(UserVerifyPhoneException.USER_VERIFY_PHONE_NotOwnPhone);
+    }
+
+    // Validate that the user has not already verified this phone
+    if (Boolean.TRUE.equals(profile.getVerifiedPhone())) {
+      throw new BaseError(UserVerifyPhoneException.USER_VERIFY_PHONE_Verified);
+    }
+
+    // Cập nhật trạng thái verifiedPhone
+    profile.setVerifiedPhone(true);
+    userProfileRepository.save(profile);
+  }
+
+  @Override
+  @Transactional
+  public void changePassword(UserChangePasswordRequest request) {
+    Long currentUserId = SecurityUtil.getSession().getUserId();
+
+    // 1. Lấy thông tin User (chứa mật khẩu)
+    UserEntity user = userRepository.findById(currentUserId)
+        .orElseThrow(() -> new BaseError(UserRoleException.USER_NOT_FOUND));
+
+    // 2. Kiểm tra mật khẩu cũ
+    // Giả sử bạn dùng PasswordUtil.checkPassword(raw, hashed)
+    if (!PasswordUtil.checkPassword(request.getOldPassword(), user.getPasswordHash())) {
+      throw new BaseError(UserRoleException.PASSWORD_INCORRECT);
+    }
+
+    // 3. (Optional) Kiểm tra mật khẩu mới có trùng mật khẩu cũ không
+    if (request.getOldPassword().equals(request.getNewPassword())) {
+      throw new BaseError(UserRoleException.PASSWORD_SAME_AS_OLD);
+    }
+
+    // 4. Mã hóa mật khẩu mới và lưu
+    // Giả sử bạn dùng PasswordUtil.hashPassword(raw) hoặc BCrypt.hashpw...
+    String newHashedPassword = PasswordUtil.hashPassword(request.getNewPassword());
+
+    user.setPasswordHash(newHashedPassword);
+    userRepository.save(user);
+  }
+
+  @Override
   @Transactional
   public UserProfileResponse updateMyProfile(UserProfileUpdateRequest request) {
     JwtTokenVo session = SecurityUtil.getSession();
@@ -243,6 +375,11 @@ public class UserServiceImpl implements UserService {
 
     if (profile.getBecomeSellerApproveStatus() == SellerApprovalStatus.PENDING) {
       throw new BaseError(UserRoleException.REQUEST_ALREADY_PENDING);
+    }
+
+    // Check that the user have verified phone number
+    if (Boolean.FALSE.equals(profile.getVerifiedPhone())) {
+      throw new BaseError(UserRoleException.PHONE_NOT_VERIFIED);
     }
 
     // 4. Cập nhật trạng thái

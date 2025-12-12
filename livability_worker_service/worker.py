@@ -56,7 +56,9 @@ def main():
             password=REDIS_PASSWORD, 
             decode_responses=True,
             ssl=True,              # Bật SSL
-            socket_timeout=5       # Timeout để tránh treo app nếu Redis die
+            socket_timeout=None,       # Timeout để tránh treo app nếu Redis die
+            socket_keepalive=True,      # Giữ kết nối luôn sống
+            health_check_interval=30  # Kiểm tra sức khỏe kết nối mỗi 30 giây
         )
         pubsub = r.pubsub()
         pubsub.subscribe(REDIS_CHANNEL)
@@ -74,6 +76,11 @@ def main():
         main() # Retry connection
     except KeyboardInterrupt:
         print("Stopping worker...")
+    except Exception as e:
+        print(f"Unexpected error: {e}")
+        # Quan trọng: Nếu worker sập, restart lại sau 5s thay vì tắt hẳn
+        time.sleep(5)
+        main()
 
 if __name__ == "__main__":
     main()

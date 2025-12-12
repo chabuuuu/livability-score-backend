@@ -1,52 +1,45 @@
 # --- STAGE 1: Builder (Cài đặt dependencies) ---
-FROM python:3.10-slim-bookworm as builder
+FROM python:3.10-slim as builder
 
 WORKDIR /app
 
 # Cài đặt các gói hệ thống cần thiết để build Python packages
-# libpq-dev cần thiết cho psycopg2
+# libpq-dev cần thiết để compile psycopg2 (nếu dùng bản source)
 RUN apt-get update && apt-get install -y \
     build-essential \
     libpq-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# 1. Tạo virtual environment tại /opt/venv
-RUN python -m venv /opt/venv
-
-# 2. Kích hoạt venv bằng cách thêm vào PATH
-ENV PATH="/opt/venv/bin:$PATH"
-
+# Copy requirements và cài đặt
 COPY requirements.txt .
 
-# 3. Cài đặt thư viện vào venv
-RUN pip install --no-cache-dir -r requirements.txt
+# --user: Cài đặt vào thư mục local của user để dễ copy sang stage sau
+# --no-cache-dir: Không lưu cache pip để giảm dung lượng
+RUN pip install --user --no-cache-dir -r requirements.txt
 
 # --- STAGE 2: Runner (Môi trường chạy thực tế) ---
-FROM python:3.10-slim-bookworm
+FROM python:3.10-slim
 
 WORKDIR /app
 
-# Cài đặt thư viện runtime cho Postgres (libpq5)
-# curl dùng để healthcheck (nếu cần)
+# Chỉ cài libpq5 (runtime) chứ không cài compiler
 RUN apt-get update && apt-get install -y \
     libpq5 \
-    curl \
     && rm -rf /var/lib/apt/lists/*
 
-# 4. Copy toàn bộ venv từ builder sang runner
-COPY --from=builder /opt/venv /opt/venv
+# Copy thư viện đã cài từ stage builder sang
+COPY --from=builder /root/.local /root/.local
 
-# 5. Thiết lập PATH để sử dụng venv mặc định
-ENV PATH="/opt/venv/bin:$PATH"
+# Đảm bảo biến môi trường PATH nhận diện được thư viện vừa copy
+ENV PATH=/root/.local/bin:$PATH
 
 # Copy source code của ứng dụng vào
 COPY . .
 
-# 6. Tạo user và phân quyền (Security Best Practice)
-RUN useradd -m appuser && chown -R appuser /app
-USER appuser
+# Copy file chứng chỉ CA nếu cần thiết (đảm bảo file này nằm cùng thư mục build)
+# COPY /certs /app/certs 
 
-# Tối ưu hóa Python
+# Tối ưu hóa Python cho container
 ENV PYTHONDONTWRITEBYTECODE=1 
 ENV PYTHONUNBUFFERED=1
 

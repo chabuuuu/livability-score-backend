@@ -11,3 +11,10 @@ class APIResponse(BaseModel, Generic[T]):
     result: str
     error: Optional[str] = None
     data: Optional[ResponseData[T]] = None
+
+
+class APIDetailResponse(BaseModel, Generic[T]):
+    status: str
+    result: str
+    error: Optional[str] = None
+    data: Optional[T] = None

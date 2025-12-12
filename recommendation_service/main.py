@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 # Import các router
-from router import livability_router, recommendation_router, amenity_router
+from router import insight_router, livability_router, recommendation_router, amenity_router
 
 app = FastAPI(title="Real Estate Recommendation Service")
 
@@ -19,6 +19,7 @@ app.add_middleware(
 app.include_router(recommendation_router.router)
 app.include_router(amenity_router.router)
 app.include_router(livability_router.router)
+app.include_router(insight_router.router)
 
 if __name__ == "__main__":
     import uvicorn

@@ -10,6 +10,7 @@ services:
 
     deploy:
       replicas: 1
+
       restart_policy:
         condition: on-failure
 
@@ -26,3 +27,9 @@ services:
         parallelism: 1
         delay: 10s
         order: stop-first
+
+    volumes:
+      - model_cache_data:/app/model_files
+
+volumes:
+  model_cache_data:

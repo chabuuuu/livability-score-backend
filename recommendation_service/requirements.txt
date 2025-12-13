@@ -8,3 +8,8 @@ pydantic==2.6.0
 python-dotenv==1.0.1
 google-generativeai>=0.3.2
 PyJWT==2.8.0
+joblib==1.5.2
+scikit-learn==1.2.2
+pandas==2.2.3
+numpy==1.26.4
+minio>=7.2.0

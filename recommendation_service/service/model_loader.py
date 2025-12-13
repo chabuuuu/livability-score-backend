@@ -2,7 +2,6 @@ import joblib
 import os
 import sys
 import zipfile
-import asyncio
 import pandas as pd
 from minio import Minio
 from minio.error import S3Error
@@ -29,14 +28,10 @@ MODEL_PATH = os.path.join(MODEL_DIR, REAL_MODEL_FILENAME)
 
 class PriceModel:
     _model = None
-    _lock = asyncio.Lock()  # Lock để tránh Race Condition khi nhiều request cùng gọi load
 
     @staticmethod
-    def _download_and_extract_sync():
-        """
-        Hàm đồng bộ (Blocking): Tải file zip từ MinIO và giải nén.
-        Hàm này sẽ chạy trong Thread riêng.
-        """
+    def _download_and_extract():
+        """Tải file zip từ MinIO và giải nén."""
         print(f"⬇️ [AI] Model not found at {MODEL_PATH}. Checking MinIO for archive '{MINIO_ARCHIVE_FILE}'...")
         
         if not os.path.exists(MODEL_DIR):
@@ -47,7 +42,7 @@ class PriceModel:
                 MINIO_ENDPOINT,
                 access_key=MINIO_ACCESS_KEY,
                 secret_key=MINIO_SECRET_KEY,
-                secure=True
+                secure=False
             )
 
             if not client.bucket_exists(MINIO_BUCKET):
@@ -55,23 +50,28 @@ class PriceModel:
                 return False
 
             # --- TỐI ƯU HÓA DOWNLOAD ---
+            # Thay vì gọi stat_object (gây chậm), ta gọi get_object luôn.
+            # Lấy size từ header của response stream.
             print(f"⬇️ [MinIO] Requesting '{MINIO_ARCHIVE_FILE}'...")
             
             response = None
             try:
                 response = client.get_object(MINIO_BUCKET, MINIO_ARCHIVE_FILE)
                 
+                # Lấy Content-Length từ header ngay lập tức
                 total_size = int(response.headers.get('content-length', 0))
                 print(f"⬇️ [MinIO] Stream started. Total size: {total_size} bytes")
                 
                 current_size = 0
-                chunk_size = 32 * 1024 
+                chunk_size = 32 * 1024 # 32KB chunks
 
+                # Tự ghi file và update progress bar thủ công
                 with open(ARCHIVE_PATH, 'wb') as file_data:
                     for data in response.stream(chunk_size):
                         file_data.write(data)
                         current_size += len(data)
                         
+                        # Update progress bar
                         if total_size > 0:
                             percent = (current_size / total_size) * 100
                             sys.stdout.write(f"\r⬇️ [MinIO] Downloading ZIP: {percent:.1f}% ({current_size}/{total_size})")
@@ -91,6 +91,7 @@ class PriceModel:
             print(f"📦 [System] Extracting '{ARCHIVE_PATH}'...")
             try:
                 with zipfile.ZipFile(ARCHIVE_PATH, 'r') as zip_ref:
+                    # Kiểm tra xem file model cần thiết có trong zip không
                     if REAL_MODEL_FILENAME not in zip_ref.namelist():
                          print(f"⚠️ [System] Warning: '{REAL_MODEL_FILENAME}' not found in zip archive!")
                          print(f"   Files in zip: {zip_ref.namelist()}")
@@ -99,6 +100,7 @@ class PriceModel:
                 
                 print(f"✅ [System] Extracted successfully to '{MODEL_DIR}'")
                 
+                # Xóa file zip cho nhẹ máy
                 if os.path.exists(ARCHIVE_PATH):
                     os.remove(ARCHIVE_PATH)
                     print(f"🗑️ [System] Removed temporary archive '{ARCHIVE_PATH}'")
@@ -116,51 +118,33 @@ class PriceModel:
         return False
 
     @classmethod
-    def _load_model_internal_sync(cls):
-        """Hàm đồng bộ chứa logic nặng: Download & Load Joblib."""
-        # 1. Kiểm tra và Download
-        if not os.path.exists(MODEL_PATH):
-            success = cls._download_and_extract_sync()
-            if not success and not os.path.exists(MODEL_PATH):
-                print("⚠️ [AI] Could not setup model file. Prediction will fail.")
-                return None
-
-        # 2. Load Joblib (CPU/Disk Bound)
-        if os.path.exists(MODEL_PATH):
-            try:
-                model = joblib.load(MODEL_PATH)
-                print(f"✅ [AI] MODEL LOADED READY: {MODEL_PATH}")
-                return model
-            except Exception as e:
-                print(f"❌ [AI] Failed to load joblib file: {e}")
-        else:
-            print(f"❌ [AI] Model file '{REAL_MODEL_FILENAME}' not found. Please check env vars.")
-        return None
-
-    @classmethod
-    async def load_model(cls):
-        """
-        Async version: Load model vào bộ nhớ.
-        Sử dụng ThreadPool để không block event loop trong quá trình download/load.
-        """
-        if cls._model is not None:
-            return
-
-        async with cls._lock: # Đảm bảo chỉ 1 coroutine được tải model tại 1 thời điểm
-            if cls._model is not None: # Double-check locking pattern
-                return
-
-            # Chạy logic đồng bộ trong thread riêng
-            cls._model = await asyncio.to_thread(cls._load_model_internal_sync)
-
-    @classmethod
-    async def predict(cls, df: pd.DataFrame) -> float:
-        """Async Predict."""
+    def load_model(cls):
+        """Quy trình: Check Local -> Download Zip & Giải nén -> Load Model."""
         if cls._model is None:
-            await cls.load_model()
+            # 1. Kiểm tra nếu file joblib chưa có, thực hiện tải và giải nén
+            if not os.path.exists(MODEL_PATH):
+                success = cls._download_and_extract()
+                if not success and not os.path.exists(MODEL_PATH):
+                    print("⚠️ [AI] Could not setup model file. Prediction will fail.")
+                    return
+
+            # 2. Load file model thật (joblib)
+            if os.path.exists(MODEL_PATH):
+                try:
+                    cls._model = joblib.load(MODEL_PATH)
+                    print(f"✅ [AI] MODEL LOADED READY: {MODEL_PATH}")
+                except Exception as e:
+                    print(f"❌ [AI] Failed to load joblib file: {e}")
+            else:
+                print(f"❌ [AI] Model file '{REAL_MODEL_FILENAME}' not found. Please check MINIO_ARCHIVE_FILE and MODEL_FILENAME env vars.")
+    
+    @classmethod
+    def predict(cls, df: pd.DataFrame) -> float:
+        if cls._model is None:
+            cls.load_model()
             if cls._model is None:
                 raise Exception("Price Prediction Model is not available.")
-        
-        # Chạy dự đoán (CPU bound) trong thread riêng để không block request khác
-        result = await asyncio.to_thread(cls._model.predict, df)
-        return result[0]
+        return cls._model.predict(df)[0]
+
+# Auto load on start
+PriceModel.load_model()

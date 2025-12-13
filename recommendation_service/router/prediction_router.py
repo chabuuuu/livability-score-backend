@@ -1,112 +1,13 @@
-# from fastapi import APIRouter, Depends, HTTPException
-# from sqlalchemy.orm import Session
-# import pandas as pd
-# import numpy as np
-
-# from config.scoring_db_config import get_scoring_db
-# from service.livability_calculator import LivabilityCalculator
-# from schema.prediction_schema import PropertyPredictionRequest, PredictionResponse
-# from service.model_loader import PriceModel
-# from schema.common import APIDetailResponse, ResponseData
-
-# router = APIRouter(prefix="/api/v1/recommendation/prediction", tags=["Price Prediction"])
-
-# # --- FEATURE CONFIGURATION ---
-# # Danh sách này PHẢI khớp chính xác thứ tự và tên cột lúc training model
-# TRAINING_NUMERICAL_FEATURES = [
-#     'area', 'num_bedrooms', 'num_bathrooms', 'num_floors',
-#     'facade_width_m', 'road_width_m',
-#     'score_healthcare', 'score_education', 'score_shopping',
-#     'score_transportation', 'score_environment', 'score_entertainment',
-#     'score_safety', 'livability_score'
-# ]
-# TRAINING_CATEGORICAL_FEATURES = [
-#     'property_type', 'legal_status', 'house_direction',
-#     'balcony_direction', 'furniture_status', 'address_district'
-# ]
-# ALL_TRAINING_FEATURES = TRAINING_NUMERICAL_FEATURES + TRAINING_CATEGORICAL_FEATURES
-
-# # Trọng số tính điểm tổng hợp (Profile mặc định)
-# DEFAULT_WEIGHTS = {
-#     'score_healthcare': 0.15,
-#     'score_education': 0.15,
-#     'score_shopping': 0.15,
-#     'score_transportation': 0.15,
-#     'score_environment': 0.15,
-#     'score_entertainment': 0.15,
-#     'score_safety': 0.10,
-# }
-
-# @router.post("/property/price", response_model=APIDetailResponse[PredictionResponse])
-# def predict_property_price(
-#     payload: PropertyPredictionRequest,
-#     scoring_db: Session = Depends(get_scoring_db)
-# ):
-#     """
-#     API dự đoán giá nhà dựa trên thông tin người dùng nhập và chỉ số Livability Score tính toán realtime.
-#     """
-#     try:
-#         # BƯỚC 1: TÍNH TOÁN LIVABILITY SCORE (Real-time từ tọa độ)
-#         calculator = LivabilityCalculator(scoring_db=scoring_db)
-        
-#         # Tính các điểm thành phần (0-100)
-#         component_scores, _ = calculator.calculate_from_coordinates(payload.latitude, payload.longitude)
-        
-#         # Tính điểm tổng hợp (Weighted Sum)
-#         livability_score = 0.0
-#         for key, weight in DEFAULT_WEIGHTS.items():
-#             livability_score += component_scores.get(key, 0) * weight
-        
-#         # BƯỚC 2: CHUẨN BỊ DỮ LIỆU CHO MODEL AI
-#         input_data = payload.model_dump()
-        
-#         # Merge điểm số vào input data
-#         input_data.update(component_scores)
-#         input_data['livability_score'] = livability_score
-        
-#         # Tạo DataFrame 1 dòng
-#         df = pd.DataFrame([input_data])
-        
-#         # Xử lý các cột bị thiếu (điền NaN - Random Forest Pipeline thường tự handle hoặc cần Imputer)
-#         # Đảm bảo DataFrame có đủ tất cả các cột như lúc train
-#         for col in ALL_TRAINING_FEATURES:
-#             if col not in df.columns:
-#                 df[col] = np.nan
-        
-#         # Sắp xếp lại thứ tự cột cho đúng chuẩn
-#         df_ordered = df[ALL_TRAINING_FEATURES]
-        
-#         # BƯỚC 3: GỌI MODEL DỰ ĐOÁN
-#         predicted_price_vnd = PriceModel.predict(df_ordered)
-        
-#         # BƯỚC 4: TRẢ KẾT QUẢ
-#         result = PredictionResponse(
-#             predicted_price=round(predicted_price_vnd, 0),
-#             predicted_price_billions=round(predicted_price_vnd / 1_000_000_000, 2),
-#             livability_score=round(livability_score, 2),
-#             component_scores=component_scores
-#         )
-
-#         return APIDetailResponse(
-#             status="200",
-#             result="Succeeded",
-#             data=result
-#         )
-
-#     except Exception as e:
-#         # Log lỗi chi tiết ra console server
-#         import traceback
-#         traceback.print_exc()
-#         return APIDetailResponse(status="500", result="Failed", error=f"Prediction Error: {str(e)}")
-
 import os
 import json
 import asyncio
 import uuid # Để tạo Prediction ID
+from fastapi.responses import StreamingResponse
 import jwt
 from itertools import cycle
 from fastapi import APIRouter, Depends, HTTPException, Security, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from sqlalchemy import text, func
 import pandas as pd
@@ -117,7 +18,7 @@ from config.redis_config import redis_client
 
 from config.scoring_db_config import get_scoring_db
 from service.livability_calculator import LivabilityCalculator
-from schema.prediction_schema import PropertyPredictionRequest, PredictionResponse
+from schema.prediction_schema import ChatMessageDTO, ChatPredictionRequest, PropertyPredictionRequest, PredictionResponse
 from service.model_loader import PriceModel
 from schema.common import APIDetailResponse, APIResponse, ResponseData
 
@@ -138,7 +39,7 @@ FALLBACK_MODELS = [
 JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", "your_secret_key")
 JWT_ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
 
-router = APIRouter(prefix="/api/v1/prediction", tags=["Price Prediction"])
+router = APIRouter(prefix="/api/v1/recommendation/prediction", tags=["Price Prediction"])
 security = HTTPBearer()
 
 # --- HELPER: AUTHENTICATION ---
@@ -184,6 +85,7 @@ def get_amenities_context_by_coords(db: Session, lat: float, lng: float):
 async def generate_insight_text(prompt: str):
     last_error = None
     for model_name in FALLBACK_MODELS:
+        print(f"Trying to call Gemini model: {model_name}")
         try:
             current_key = get_next_key()
             genai.configure(api_key=current_key)
@@ -218,7 +120,7 @@ WEIGHTS = {
     'score_transportation': 0.15, 'score_environment': 0.15, 'score_entertainment': 0.15, 'score_safety': 0.10
 }
 
-@router.post("/price", response_model=APIDetailResponse[PredictionResponse])
+@router.post("/property/price", response_model=APIDetailResponse[PredictionResponse])
 async def predict_property_price(
     payload: PropertyPredictionRequest,
     user_id: int = Depends(get_current_user_id),
@@ -279,6 +181,8 @@ async def predict_property_price(
         3. Chỉ ra điểm trừ (nếu có).
         """
 
+        print("Prompt for AI Insight:", ai_prompt)
+
         # 5. Gọi Gemini (Async)
         ai_insight_text = await generate_insight_text(ai_prompt)
 
@@ -316,3 +220,138 @@ async def predict_property_price(
         import traceback
         traceback.print_exc()
         return APIDetailResponse(status="500", result="Failed", error=f"Error: {str(e)}")
+    
+async def generate_content_smart(prompt: str):
+    """Logic retry model & key tự động cho streaming"""
+    last_error = None
+    for model_name in FALLBACK_MODELS:
+        # Thử tối đa 2 key cho mỗi model
+        for _ in range(2):
+            try:
+                current_key = get_next_key()
+                genai.configure(api_key=current_key)
+                model = genai.GenerativeModel(model_name=model_name)
+                
+                response = await model.generate_content_async(prompt, stream=True)
+                async for chunk in response:
+                    yield chunk
+                return 
+            except google_exceptions.ResourceExhausted:
+                continue # Đổi key/model
+            except Exception as e:
+                last_error = e
+                break # Lỗi khác thì đổi model luôn
+    raise last_error if last_error else Exception("AI Overloaded")
+
+# --- CHAT FOLLOW-UP --
+@router.post("/property/chat/stream")
+async def chat_prediction_stream(
+    payload: ChatPredictionRequest,
+    user_id: int = Depends(get_current_user_id)
+):
+    """
+    Cho phép user chat tiếp về kết quả dự đoán vừa nhận được.
+    Yêu cầu: prediction_id hợp lệ (vẫn còn trong Redis).
+    """
+    prediction_id = payload.prediction_id
+    user_message = payload.message
+    
+    # 1. Lấy lịch sử từ Redis
+    chat_key = f"rec:chat:prediction:{prediction_id}:{user_id}"
+    history_data = redis_client.get(chat_key)
+    
+    if not history_data:
+        # Trường hợp hết hạn cache hoặc ID sai
+        async def error_stream():
+            yield json.dumps({"type": "error", "message": "Phiên dự đoán đã hết hạn hoặc không tồn tại."}) + "\n"
+        return StreamingResponse(error_stream(), media_type="application/x-ndjson")
+
+    chat_history = json.loads(history_data)
+    
+    # 2. Xây dựng Prompt
+    # Lấy system context (thông tin nhà) từ tin nhắn đầu tiên
+    system_context = chat_history[0]['text'] if chat_history else ""
+    
+    # Lấy các tin nhắn gần nhất để AI nhớ hội thoại
+    recent_history_str = ""
+    for msg in chat_history[-6:]: # Lấy 3 cặp gần nhất
+        role = "AI" if msg['role'] == 'model' else "Khách hàng"
+        if msg['role'] != 'system_context':
+            recent_history_str += f"- {role}: {msg['text']}\n"
+
+    chat_prompt = f"""
+    Bạn là chuyên gia tư vấn BĐS đang hỗ trợ khách hàng.
+    
+    --- THÔNG TIN CĂN NHÀ ĐANG THẢO LUẬN (Context gốc) ---
+    {system_context}
+
+    --- LỊCH SỬ HỘI THOẠI ---
+    {recent_history_str}
+
+    --- CÂU HỎI MỚI ---
+    Khách hàng: "{user_message}"
+
+    --- YÊU CẦU ---
+    Trả lời ngắn gọn, chuyên nghiệp. Giải thích dựa trên dữ liệu căn nhà (diện tích, vị trí, tiện ích...).
+    Nếu khách hỏi về giá, hãy bảo vệ quan điểm định giá của hệ thống nhưng vẫn gợi mở các yếu tố có thể thương lượng.
+    """
+
+    # 3. Stream Response
+    async def generate_chat_stream():
+        full_response = ""
+        try:
+            async for chunk in generate_content_smart(chat_prompt):
+                if chunk.text:
+                    yield json.dumps({"type": "content", "text": chunk.text}) + "\n"
+                    full_response += chunk.text
+            
+            # 4. Cập nhật Redis
+            if full_response:
+                chat_history.append({"role": "user", "text": user_message})
+                chat_history.append({"role": "model", "text": full_response})
+                # Giữ lại tối đa 20 tin (bao gồm cả system context ở đầu)
+                # Đảm bảo phần tử đầu tiên (context) luôn được giữ
+                updated_history = [chat_history[0]] + chat_history[-19:]
+                
+                redis_client.setex(chat_key, 86400, json.dumps(updated_history))
+                
+        except Exception as e:
+            yield json.dumps({"type": "error", "message": str(e)}) + "\n"
+
+    return StreamingResponse(generate_chat_stream(), media_type="application/x-ndjson")
+
+# --- API 3: GET CHAT HISTORY ---
+@router.get("/property/chat/history/{prediction_id}", response_model=APIResponse[ChatMessageDTO])
+async def get_chat_history(
+    prediction_id: str,
+    user_id: int = Depends(get_current_user_id)
+):
+    """
+    Lấy toàn bộ lịch sử chat của phiên dự đoán này từ Redis.
+    """
+    try:
+        chat_key = f"rec:chat:prediction:{prediction_id}:{user_id}"
+        history_data = redis_client.get(chat_key)
+        
+        items = []
+        if history_data:
+            raw_history = json.loads(history_data)
+            # Loại bỏ system context khỏi lịch sử trả về cho user
+            items = [
+                ChatMessageDTO(role=msg['role'], text=msg['text']) 
+                for msg in raw_history 
+                if msg['role'] != 'system_context'
+            ]
+            
+        return APIResponse(
+            status="200",
+            result="Succeeded",
+            data=ResponseData(items=items)
+        )
+    except Exception as e:
+        # print(f"Error fetching history: {e}")
+        return APIResponse(
+            status="200", 
+            result="Succeeded",
+            data=ResponseData(items=[])
+        )

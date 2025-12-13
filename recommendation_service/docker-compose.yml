@@ -10,6 +10,7 @@ services:
 
     deploy:
       replicas: 1
+
       restart_policy:
         condition: on-failure
 
@@ -27,6 +28,8 @@ services:
         delay: 10s
         order: stop-first
 
-    # Mount models file
     volumes:
-      - ./model_files:/app/model_files
+      - model_cache_data:/app/model_files
+
+volumes:
+  model_cache_data:

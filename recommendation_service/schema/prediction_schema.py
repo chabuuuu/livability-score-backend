@@ -1,0 +1,39 @@
+from pydantic import BaseModel, Field
+from typing import Optional, Dict
+
+class PropertyPredictionRequest(BaseModel):
+    # Location (Để tính Livability Score)
+    latitude: float = Field(..., description="Vĩ độ", example=10.7725)
+    longitude: float = Field(..., description="Kinh độ", example=106.6980)
+    address_district: str = Field(..., description="Quận (VD: Quận 1, Quận 7)", example="Quận 1")
+
+    # Đặc điểm vật lý (Physical Attributes)
+    area: float = Field(..., gt=0, description="Diện tích (m2)")
+    num_bedrooms: float = Field(default=1.0)
+    num_bathrooms: float = Field(default=1.0)
+    num_floors: float = Field(default=1.0)
+    facade_width_m: float = Field(default=0.0, description="Độ rộng mặt tiền (m)")
+    road_width_m: float = Field(default=0.0, description="Độ rộng đường trước nhà (m)")
+    
+    # Đặc điểm phân loại (Categorical Attributes)
+    property_type: str = Field(..., description="apartment, house, villa...")
+    legal_status: str = Field(default="Sổ hồng")
+    house_direction: Optional[str] = Field(default=None, description="Hướng nhà (Đông, Tây...)")
+    balcony_direction: Optional[str] = Field(default=None, description="Hướng ban công")
+    furniture_status: Optional[str] = Field(default=None, description="Nội thất (Đầy đủ, Cơ bản...)")
+
+class PredictionResponse(BaseModel):
+    prediction_id: str # ID định danh cho phiên dự đoán này (dùng để chat tiếp)
+    predicted_price: float
+    predicted_price_billions: float
+    livability_score: float
+    component_scores: Dict[str, float]
+    ai_insight: str # Lời giải thích của AI
+
+class ChatPredictionRequest(BaseModel):
+    prediction_id: str # UUID nhận được từ API /price
+    message: str
+
+class ChatMessageDTO(BaseModel):
+    role: str
+    text: str

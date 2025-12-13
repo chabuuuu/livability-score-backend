@@ -26,3 +26,7 @@ services:
         parallelism: 1
         delay: 10s
         order: stop-first
+
+    # Mount models file
+    volumes:
+      - ./model_files:/app/model_files

@@ -145,7 +145,7 @@ async def predict_property_price(
             if col not in df.columns: df[col] = np.nan
         df_ordered = df[ALL_TRAINING_FEATURES]
         
-        predicted_price = PriceModel.predict(df_ordered)
+        predicted_price = await PriceModel.predict(df_ordered)
         price_billions = predicted_price / 1_000_000_000
 
         # 3. Lấy Context Tiện ích thực tế (Để AI chém gió có cơ sở)

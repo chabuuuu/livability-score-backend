@@ -2,31 +2,33 @@ version: "3.9"
 
 services:
   kltn-recommendation-service-be:
-    image: ghcr.io/${GITHUB_REPOSITORY_OWNER_LOWERCASE}/recommendation-service-be:${IMAGE_VERSION}
+    image: kltn-recommendation-service-be:${IMAGE_VERSION}
     ports:
       - "9094:8084"
     env_file:
       - .env
 
-    deploy:
-      replicas: 1
+    restart: unless-stopped
 
-      restart_policy:
-        condition: on-failure
+    deploy:
+      # replicas: 1
+
+      # restart_policy:
+      #   condition: on-failure
 
       resources:
         limits:
           cpus: "0.2"
-          memory: 2G
+          memory: 3G
 
         reservations:
           cpus: "0.2"
           memory: 1.5G
 
-      update_config:
-        parallelism: 1
-        delay: 10s
-        order: stop-first
+      # update_config:
+      #   parallelism: 1
+      #   delay: 10s
+      #   order: stop-first
 
     volumes:
       - model_cache_data:/app/model_files

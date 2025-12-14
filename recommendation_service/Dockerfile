@@ -4,6 +4,7 @@ FROM python:3.10-slim as builder
 WORKDIR /app
 
 # Cài đặt các gói hệ thống cần thiết để build Python packages
+# libpq-dev cần thiết để compile psycopg2 (nếu dùng bản source)
 RUN apt-get update && apt-get install -y \
     build-essential \
     libpq-dev \
@@ -24,7 +25,6 @@ WORKDIR /app
 # Chỉ cài libpq5 (runtime) chứ không cài compiler
 RUN apt-get update && apt-get install -y \
     libpq5 \
-    curl \ 
     && rm -rf /var/lib/apt/lists/*
 
 # Copy thư viện đã cài từ stage builder sang
@@ -36,18 +36,17 @@ ENV PATH=/root/.local/bin:$PATH
 # Copy source code của ứng dụng vào
 COPY . .
 
+# Copy file chứng chỉ CA nếu cần thiết (đảm bảo file này nằm cùng thư mục build)
+# COPY /certs /app/certs 
+
 # Tối ưu hóa Python cho container
 ENV PYTHONDONTWRITEBYTECODE=1 
 ENV PYTHONUNBUFFERED=1
 
-# Expose port
+# Expose port (Chỉ mang tính chất tài liệu, uvicorn sẽ listen port này)
 EXPOSE 8084
 
-# --- LỆNH CHẠY TỐI ƯU HÓA (RAM SHARING) ---
-# 1. python preload_model.py: Tải file model về đĩa nếu chưa có (Single process).
-# 2. gunicorn ... --preload: Load code & Model vào RAM ở Master Process, sau đó fork ra 3 workers.
-#    Các worker sẽ dùng chung vùng nhớ model này -> Tiết kiệm RAM.
-# --timeout 900: Tăng thời gian chờ khởi động (đề phòng load model lâu).
-# --access-logfile -: Đẩy log ra stdout để Docker hiển thị.
-
-CMD ["sh", "-c", "python preload_model.py && gunicorn main:app --bind 0.0.0.0:8084 --workers 3 --worker-class uvicorn.workers.UvicornWorker --preload --timeout 900 --access-logfile - --error-logfile -"]
+# Lệnh chạy: Sử dụng uvicorn trực tiếp thay vì python main.py
+# --workers 4: Chạy đa luồng (Production nên set workers = số CPU core * 2 + 1)
+# --proxy-headers: Quan trọng nếu chạy sau Nginx/Traefik
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8084", "--workers", "1", "--proxy-headers"]

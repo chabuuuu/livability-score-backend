@@ -54,6 +54,7 @@ jobs:
           host: ${{ secrets.SERVER_HOST_RECOMMENDATION }}
           username: ${{ secrets.SERVER_USER_RECOMMENDATION }}
           key: ${{ secrets.SERVER_SSH_PRIVATE_KEY_RECOMMENDATION }}
+          passphrase: ${{ secrets.SERVER_SSH_PASSPHRASE_RECOMMENDATION }}
           port: 22
           source: "${{ env.IMAGE_FILENAME }}"
           target: "/tmp" # Copy to a temporary directory on the server
@@ -64,6 +65,7 @@ jobs:
           host: ${{ secrets.SERVER_HOST_RECOMMENDATION }}
           username: ${{ secrets.SERVER_USER_RECOMMENDATION }}
           key: ${{ secrets.SERVER_SSH_PRIVATE_KEY_RECOMMENDATION }}
+          passphrase: ${{ secrets.SERVER_SSH_PASSPHRASE_RECOMMENDATION }}
           port: 22
           script: |
             rm -rf ${{ env.DEPLOY_FOLDER }}/*
@@ -74,6 +76,7 @@ jobs:
           host: ${{ secrets.SERVER_HOST_RECOMMENDATION }}
           username: ${{ secrets.SERVER_USER_RECOMMENDATION }}
           key: ${{ secrets.SERVER_SSH_PRIVATE_KEY_RECOMMENDATION }}
+          passphrase: ${{ secrets.SERVER_SSH_PASSPHRASE_RECOMMENDATION }}
           source: "./${{ env.SERVICE_FOLDER }}/docker-compose.yml"
           target: ${{ env.DEPLOY_FOLDER }}
 
@@ -88,6 +91,7 @@ jobs:
           host: ${{ secrets.SERVER_HOST_RECOMMENDATION }}
           username: ${{ secrets.SERVER_USER_RECOMMENDATION }}
           key: ${{ secrets.SERVER_SSH_PRIVATE_KEY_RECOMMENDATION }}
+          passphrase: ${{ secrets.SERVER_SSH_PASSPHRASE_RECOMMENDATION }}
           port: 22
           script: |
             cp ${{ env.ENV_FILE_PATH }} ${{ env.DEPLOY_FOLDER }}/${{ env.SERVICE_FOLDER }}

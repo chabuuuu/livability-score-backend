@@ -51,6 +51,13 @@ public interface PropertyMapper {
         .collect(Collectors.toList());
   }
 
+  default String mapImagesToThumbnail(List<PropertyImageEntity> images) {
+    if (images == null || images.isEmpty()) {
+      return null;
+    }
+    return images.getFirst().getImageUrl();
+  }
+
   default List<String> mapTagsToNames(Set<TagEntity> tags) {
     if (tags == null) {
       return List.of();
@@ -75,6 +82,7 @@ public interface PropertyMapper {
     return new PageImpl<>(responses, entities.getPageable(), entities.getTotalElements());
   }
 
+  @Mapping(source = "images", target = "thumbnailUrl")
   PropertyMapSummaryResponse toMapSummaryResponse(PropertyEntity entity);
 
   List<PropertyMapSummaryResponse> toMapSummaryResponseList(List<PropertyEntity> entities);

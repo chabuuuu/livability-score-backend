@@ -21,7 +21,7 @@ services:
 
         reservations:
           cpus: "0.2"
-          memory: 500M
+          memory: 1.5G
 
       update_config:
         parallelism: 1

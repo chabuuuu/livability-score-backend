@@ -16,12 +16,12 @@ services:
 
       resources:
         limits:
-          cpus: "0.2"
-          memory: 500M
+          cpus: "0.5"
+          memory: 1G
 
         reservations:
           cpus: "0.2"
-          memory: 256M
+          memory: 500M
 
       update_config:
         parallelism: 1

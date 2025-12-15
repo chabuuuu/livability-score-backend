@@ -1,5 +1,6 @@
 from pydantic import BaseModel, Field
 from typing import Optional, Dict
+from datetime import datetime
 
 class PropertyPredictionRequest(BaseModel):
     # Location (Để tính Livability Score)
@@ -37,3 +38,18 @@ class ChatPredictionRequest(BaseModel):
 class ChatMessageDTO(BaseModel):
     role: str
     text: str
+
+
+# --- NEW: History DTO ---
+class PredictHistoryDTO(BaseModel):
+    prediction_id: str
+    created_at: datetime
+    address_district: str
+    area: float
+    property_type: str
+    predicted_price_billions: float
+    livability_score: float
+    ai_insight: Optional[str] = None
+    
+    class Config:
+        from_attributes = True

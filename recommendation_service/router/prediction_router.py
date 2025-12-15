@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, Security, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
-from sqlalchemy import text, func
+from sqlalchemy import desc, text, func
 import pandas as pd
 import numpy as np
 import google.generativeai as genai
@@ -17,8 +17,9 @@ from google.api_core import exceptions as google_exceptions
 from config.redis_config import redis_client
 
 from config.scoring_db_config import get_scoring_db
+from model.predict_history import PredictHistory
 from service.livability_calculator import LivabilityCalculator
-from schema.prediction_schema import ChatMessageDTO, ChatPredictionRequest, PropertyPredictionRequest, PredictionResponse
+from schema.prediction_schema import ChatMessageDTO, ChatPredictionRequest, PredictHistoryDTO, PropertyPredictionRequest, PredictionResponse
 from service.model_loader import PriceModel
 from schema.common import APIDetailResponse, APIResponse, ResponseData
 
@@ -200,6 +201,49 @@ async def predict_property_price(
         ]
         redis_client.setex(chat_history_key, 86400, json.dumps(initial_history))
 
+        # Save DB History (UPDATED)
+        if user_id and user_id > 0:
+            try:
+                new_history = PredictHistory(
+                    prediction_id=prediction_id,
+                    user_id=user_id,
+                    # Location
+                    longitude=payload.longitude,
+                    latitude=payload.latitude,
+                    address_district=payload.address_district,
+                    location=func.ST_SetSRID(func.ST_MakePoint(payload.longitude, payload.latitude), 4326),
+                    # Input
+                    area=payload.area,
+                    num_bedrooms=payload.num_bedrooms,
+                    num_bathrooms=payload.num_bathrooms,
+                    num_floors=payload.num_floors,
+                    facade_width_m=payload.facade_width_m,
+                    road_width_m=payload.road_width_m,
+                    property_type=payload.property_type,
+                    legal_status=payload.legal_status,
+                    house_direction=payload.house_direction,
+                    balcony_direction=payload.balcony_direction,
+                    furniture_status=payload.furniture_status,
+                    # Output
+                    predicted_price=predicted_price,
+                    predicted_price_billions=price_billions,
+                    ai_insight=ai_insight_text, # <--- LƯU INSIGHT VÀO DB
+                    # Scores
+                    livability_score=total_livability,
+                    score_healthcare=scores.get('score_healthcare'),
+                    score_education=scores.get('score_education'),
+                    score_shopping=scores.get('score_shopping'),
+                    score_transportation=scores.get('score_transportation'),
+                    score_environment=scores.get('score_environment'),
+                    score_entertainment=scores.get('score_entertainment'),
+                    score_public_safety=scores.get('score_safety') 
+                )
+                scoring_db.add(new_history)
+                scoring_db.commit()
+            except Exception as db_err:
+                print(f"Failed to save history: {db_err}")
+                scoring_db.rollback()
+
         # 7. Trả kết quả
         result = PredictionResponse(
             prediction_id=prediction_id,
@@ -221,6 +265,33 @@ async def predict_property_price(
         traceback.print_exc()
         return APIDetailResponse(status="500", result="Failed", error=f"Error: {str(e)}")
     
+@router.get("/history", response_model=APIResponse[PredictHistoryDTO])
+async def get_prediction_history(
+    user_id: int = Depends(get_current_user_id),
+    db: Session = Depends(get_scoring_db),
+    page: int = 1,
+    limit: int = 10
+):
+    if not user_id:
+        return APIResponse(status="401", result="Failed", error="User not authenticated", data=ResponseData(items=[]))
+
+    try:
+        skip = (page - 1) * limit
+        histories = db.query(PredictHistory)\
+            .filter(PredictHistory.user_id == user_id)\
+            .order_by(desc(PredictHistory.created_at))\
+            .offset(skip)\
+            .limit(limit)\
+            .all()
+
+        return APIResponse(
+            status="200",
+            result="Succeeded",
+            data=ResponseData(items=[PredictHistoryDTO.model_validate(h) for h in histories])
+        )
+    except Exception as e:
+        return APIResponse(status="500", result="Failed", error=str(e), data=ResponseData(items=[]))
+
 async def generate_content_smart(prompt: str):
     """Logic retry model & key tự động cho streaming"""
     last_error = None

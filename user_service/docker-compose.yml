@@ -15,6 +15,10 @@ services:
       restart_policy:
         condition: on-failure
 
+      placement:
+        constraints:
+          - node.role == worker
+
       resources:
         limits:
           cpus: "0.8"
@@ -28,3 +32,10 @@ services:
         parallelism: 1
         delay: 10s
         order: stop-first
+
+    networks:
+      - kltn-shared-network
+
+networks:
+  kltn-shared-network:
+    external: true

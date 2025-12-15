@@ -15,6 +15,7 @@ public class UserProfileResponse {
   private String avatarUrl;
   private String liveAddress;
   private String preferenceType;
+  private Boolean verifiedPhone;
   private Instant updateAt;
 
   // Các trọng số

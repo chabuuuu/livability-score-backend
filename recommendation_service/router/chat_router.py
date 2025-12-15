@@ -28,7 +28,11 @@ def get_next_key():
     try: return next(key_cycle)
     except: raise Exception("No API Keys available")
 
-FALLBACK_MODELS = ["gemini-2.5-flash", "gemini-1.5-flash", "gemini-1.5-pro"]
+FALLBACK_MODELS = [
+    "gemini-2.5-flash",
+    "gemini-2.5-flash-lite", 
+    "gemini-robotics-er-1.5-preview"
+]
 
 JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", "your_secret_key")
 JWT_ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")

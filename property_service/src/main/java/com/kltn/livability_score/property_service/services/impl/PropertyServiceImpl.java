@@ -1,6 +1,8 @@
 package com.kltn.livability_score.property_service.services.impl;
 
 
+import com.kltn.livability_score.property_service.client.UserClient;
+import com.kltn.livability_score.property_service.client.model.UserProfileResponse;
 import com.kltn.livability_score.property_service.entity.PropertyEntity;
 import com.kltn.livability_score.property_service.entity.PropertyImageEntity;
 import com.kltn.livability_score.property_service.entity.TagEntity;
@@ -8,10 +10,12 @@ import com.kltn.livability_score.property_service.enums.PropertyApprovalStatus;
 import com.kltn.livability_score.property_service.exception.handler.BaseError;
 import com.kltn.livability_score.property_service.exception.property.PropertyException;
 import com.kltn.livability_score.property_service.mapper.PropertyMapper;
+import com.kltn.livability_score.property_service.mapper.UserMapper;
 import com.kltn.livability_score.property_service.model.jwt.vo.JwtTokenVo;
 import com.kltn.livability_score.property_service.model.property.request.ApprovePropertyRequest;
 import com.kltn.livability_score.property_service.model.property.request.PropertyRequest;
 import com.kltn.livability_score.property_service.model.property.response.PropertyDetailResponse;
+import com.kltn.livability_score.property_service.model.property.response.PropertyDetailResponse.SellerProfile;
 import com.kltn.livability_score.property_service.model.property.response.PropertyMapSummaryResponse;
 import com.kltn.livability_score.property_service.model.specifications.SearchDataDto;
 import com.kltn.livability_score.property_service.publisher.PropertyEventPublisher;
@@ -43,6 +47,8 @@ public class PropertyServiceImpl implements PropertyService {
   private final PropertyMapper propertyMapper;
   private final StringRedisTemplate redisTemplate;
   private final PropertyEventPublisher propertyEventPublisher;
+  private final UserClient userClient;
+  private final UserMapper userMapper;
 
   @Override
   @SneakyThrows
@@ -132,7 +138,25 @@ public class PropertyServiceImpl implements PropertyService {
     // Lưu danh sách các ID đã thay đổi vào 1 Set để Scheduler biết cái nào cần update
     redisTemplate.opsForSet().add("property:changed_views", String.valueOf(propertyId));
 
-    return propertyMapper.toDetailResponse(entity);
+    PropertyDetailResponse propertyDetailResponse = propertyMapper.toDetailResponse(entity);
+
+    try {
+      if (entity.getUserId() != null){
+        var userProfile = userClient.getUserProfile(
+            entity.getUserId()
+        );
+
+        SellerProfile sellerProfile = userMapper.toSellerProfile(userProfile.getData());
+
+        propertyDetailResponse.setSellerProfile(sellerProfile);
+
+      }
+    } catch (Exception e) {
+      System.out.println("Failed to fetch user profile for property ID " + propertyId + ": " + e.getMessage());
+    }
+
+
+    return propertyDetailResponse;
   }
 
   @Override

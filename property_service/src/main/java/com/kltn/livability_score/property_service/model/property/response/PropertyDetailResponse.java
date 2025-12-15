@@ -1,8 +1,10 @@
 package com.kltn.livability_score.property_service.model.property.response;
 
 
+import com.kltn.livability_score.property_service.client.model.UserProfileResponse;
 import com.kltn.livability_score.property_service.enums.ListingType;
 import com.kltn.livability_score.property_service.enums.PropertyApprovalStatus;
+import com.kltn.livability_score.property_service.enums.SellerApprovalStatus;
 import lombok.Data;
 import org.locationtech.jts.geom.Point; // (Cần dependency jts-core)
 
@@ -21,6 +23,18 @@ public class PropertyDetailResponse {
 
   // Ownership and Status
   private Long userId;
+  private SellerProfile sellerProfile;
+
+  @Data
+  public static class SellerProfile {
+    private String fullName;
+    private String phoneNumber;
+    private String avatarUrl;
+    private String liveAddress;
+    private Boolean verifiedPhone;
+    private Instant updateAt;
+  }
+
   private PropertyApprovalStatus approvalStatus;
 
   // Core Info

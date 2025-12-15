@@ -1,7 +1,7 @@
-package com.kltn.livability_score.user_service.model.user.response;
+package com.kltn.livability_score.property_service.client.model;
 
 
-import com.kltn.livability_score.user_service.enums.SellerApprovalStatus;
+import com.kltn.livability_score.property_service.enums.SellerApprovalStatus;
 import java.math.BigDecimal;
 import java.time.Instant;
 import lombok.Data;
@@ -28,7 +28,4 @@ public class UserProfileResponse {
   private BigDecimal preferenceHealthcare;
 
   private SellerApprovalStatus becomeSellerApproveStatus;
-
-  // Email/Username (Lấy từ UserEntity liên quan nếu cần)
-  // private String username;
 }

@@ -36,11 +36,9 @@ class PredictHistory(Base):
     # Prediction Results
     predicted_price = Column(Numeric(20, 2))
     predicted_price_billions = Column(Numeric(15, 2))
+    ai_insight = Column(Text)
     
-    # NEW: Lưu nội dung phân tích của AI
-    ai_insight = Column(Text) 
-    
-    # Scores
+    # Scores (Individual Columns)
     livability_score = Column(Numeric(30, 15))
     score_healthcare = Column(Numeric(30, 15))
     score_education = Column(Numeric(30, 15))
@@ -53,3 +51,17 @@ class PredictHistory(Base):
     # Metadata
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    # --- NEW PROPERTY: Gom nhóm điểm số thành Dictionary ---
+    # Giúp Pydantic có thể serialize thành "component_scores": {...}
+    @property
+    def component_scores(self):
+        return {
+            "score_healthcare": float(self.score_healthcare) if self.score_healthcare is not None else 0.0,
+            "score_education": float(self.score_education) if self.score_education is not None else 0.0,
+            "score_transportation": float(self.score_transportation) if self.score_transportation is not None else 0.0,
+            "score_environment": float(self.score_environment) if self.score_environment is not None else 0.0,
+            "score_public_safety": float(self.score_public_safety) if self.score_public_safety is not None else 0.0,
+            "score_shopping": float(self.score_shopping) if self.score_shopping is not None else 0.0,
+            "score_entertainment": float(self.score_entertainment) if self.score_entertainment is not None else 0.0
+        }

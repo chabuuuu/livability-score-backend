@@ -29,8 +29,13 @@
 	<properties>
 		<java.version>21</java.version>
     <org.mapstruct.version>1.6.3</org.mapstruct.version>
+    <spring-cloud.version>2025.0.0</spring-cloud.version>
   </properties>
 	<dependencies>
+    <dependency>
+      <artifactId>spring-cloud-starter-openfeign</artifactId>
+      <groupId>org.springframework.cloud</groupId>
+    </dependency>
     <dependency>
       <groupId>org.n52.jackson</groupId>
       <artifactId>jackson-datatype-jts</artifactId>
@@ -142,6 +147,18 @@
 			<scope>test</scope>
 		</dependency>
 	</dependencies>
+
+  <dependencyManagement>
+    <dependencies>
+      <dependency>
+        <artifactId>spring-cloud-dependencies</artifactId>
+        <groupId>org.springframework.cloud</groupId>
+        <scope>import</scope>
+        <type>pom</type>
+        <version>${spring-cloud.version}</version>
+      </dependency>
+    </dependencies>
+  </dependencyManagement>
 
 	<build>
     <plugins>

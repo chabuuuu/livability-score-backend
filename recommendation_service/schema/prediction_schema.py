@@ -40,7 +40,6 @@ class ChatMessageDTO(BaseModel):
     text: str
 
 
-# --- NEW: History DTO ---
 class PredictHistoryDTO(BaseModel):
     prediction_id: str
     created_at: datetime
@@ -50,6 +49,25 @@ class PredictHistoryDTO(BaseModel):
     predicted_price_billions: float
     livability_score: float
     ai_insight: Optional[str] = None
+
+    longitude: float
+    latitude: float
+    address_district: str
+
+    # Input Features
+    area: float
+    num_bedrooms: float
+    num_bathrooms: float
+    num_floors: float
+    facade_width_m: float
+    road_width_m: float
+    property_type: str
+    legal_status: str
+    house_direction: Optional[str] = None
+    balcony_direction: Optional[str] = None
+    furniture_status: Optional[str] = None
+
+    component_scores: Dict[str, float] 
     
     class Config:
-        from_attributes = True
+        from_attributes = True # Cho phép mapping từ ORM Object

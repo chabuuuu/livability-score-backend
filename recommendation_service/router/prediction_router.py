@@ -157,6 +157,11 @@ async def predict_property_price(
         Bạn là chuyên gia định giá Bất động sản. Hãy giải thích tại sao căn nhà này có giá dự đoán là {price_billions:,.2f} tỷ VNĐ.
         
         --- THÔNG TIN CĂN NHÀ ---
+        """
+        if payload.full_address:
+            ai_prompt += f"- Địa chỉ đầy đủ: {payload.full_address}"
+
+        ai_prompt += f"""
         - Vị trí: {payload.address_district} (Lat: {payload.latitude}, Lng: {payload.longitude})
         - Diện tích: {payload.area}m2, {payload.num_floors} tầng.
         - Kết cấu: {payload.num_bedrooms} ngủ, {payload.num_bathrooms} vệ sinh.
@@ -211,6 +216,7 @@ async def predict_property_price(
                     longitude=payload.longitude,
                     latitude=payload.latitude,
                     address_district=payload.address_district,
+                    full_address=payload.full_address,
                     location=func.ST_SetSRID(func.ST_MakePoint(payload.longitude, payload.latitude), 4326),
                     # Input
                     area=payload.area,
@@ -236,7 +242,7 @@ async def predict_property_price(
                     score_transportation=scores.get('score_transportation'),
                     score_environment=scores.get('score_environment'),
                     score_entertainment=scores.get('score_entertainment'),
-                    score_public_safety=scores.get('score_safety') 
+                    score_public_safety=scores.get('score_public_safety') 
                 )
                 scoring_db.add(new_history)
                 scoring_db.commit()

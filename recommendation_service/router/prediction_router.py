@@ -1,3 +1,4 @@
+from datetime import datetime
 import os
 import json
 import asyncio
@@ -157,6 +158,11 @@ async def predict_property_price(
         Bạn là chuyên gia định giá Bất động sản. Hãy giải thích tại sao căn nhà này có giá dự đoán là {price_billions:,.2f} tỷ VNĐ.
         
         --- THÔNG TIN CĂN NHÀ ---
+        """
+        if payload.full_address:
+            ai_prompt += f"- Địa chỉ đầy đủ: {payload.full_address}"
+
+        ai_prompt += f"""
         - Vị trí: {payload.address_district} (Lat: {payload.latitude}, Lng: {payload.longitude})
         - Diện tích: {payload.area}m2, {payload.num_floors} tầng.
         - Kết cấu: {payload.num_bedrooms} ngủ, {payload.num_bathrooms} vệ sinh.
@@ -211,6 +217,7 @@ async def predict_property_price(
                     longitude=payload.longitude,
                     latitude=payload.latitude,
                     address_district=payload.address_district,
+                    full_address=payload.full_address,
                     location=func.ST_SetSRID(func.ST_MakePoint(payload.longitude, payload.latitude), 4326),
                     # Input
                     area=payload.area,
@@ -236,7 +243,7 @@ async def predict_property_price(
                     score_transportation=scores.get('score_transportation'),
                     score_environment=scores.get('score_environment'),
                     score_entertainment=scores.get('score_entertainment'),
-                    score_public_safety=scores.get('score_safety') 
+                    score_public_safety=scores.get('score_public_safety') 
                 )
                 scoring_db.add(new_history)
                 scoring_db.commit()
@@ -378,8 +385,8 @@ async def chat_prediction_stream(
             
             # 4. Cập nhật Redis
             if full_response:
-                chat_history.append({"role": "user", "text": user_message})
-                chat_history.append({"role": "model", "text": full_response})
+                chat_history.append({"role": "user", "text": user_message, "created_at": datetime.now().isoformat()})
+                chat_history.append({"role": "model", "text": full_response, "created_at": datetime.now().isoformat()})
                 # Giữ lại tối đa 20 tin (bao gồm cả system context ở đầu)
                 # Đảm bảo phần tử đầu tiên (context) luôn được giữ
                 updated_history = [chat_history[0]] + chat_history[-19:]

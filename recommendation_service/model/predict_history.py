@@ -18,6 +18,7 @@ class PredictHistory(Base):
     longitude = Column(Numeric(11, 8))
     latitude = Column(Numeric(10, 8))
     address_district = Column(String(100))
+    full_address = Column(String(255))
     location = Column(Geometry('POINT', srid=4326))
 
     # Input Features

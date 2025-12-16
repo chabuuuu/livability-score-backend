@@ -4,7 +4,7 @@ services:
   kltn-property-service-be:
     image: ghcr.io/${GITHUB_REPOSITORY_OWNER_LOWERCASE}/property-service-be:${IMAGE_VERSION}
     ports:
-      - "9092:8080"
+      - "127.0.0.1:9092:8080"
     env_file:
       - .env
     deploy:

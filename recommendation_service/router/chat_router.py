@@ -1,3 +1,4 @@
+from datetime import datetime
 import os
 import json
 import asyncio
@@ -51,6 +52,7 @@ class GeneralChatRequest(BaseModel):
 class ChatMessageDTO(BaseModel):
     role: str
     text: str
+    created_at: datetime
 
 # --- AUTH HELPER ---
 def get_current_user_id(credentials: HTTPAuthorizationCredentials = Security(security)) -> int:
@@ -200,8 +202,8 @@ async def chat_general_stream(
             
             if full_response:
                 # Lưu tin nhắn mới vào lịch sử
-                chat_history.append({"role": "user", "text": user_message})
-                chat_history.append({"role": "model", "text": full_response})
+                chat_history.append({"role": "user", "text": user_message, "created_at": datetime.now()})
+                chat_history.append({"role": "model", "text": full_response, "created_at": datetime.now()})
                 # Giữ 40 tin nhắn gần nhất
                 updated_history = chat_history[-40:]
                 redis_client.setex(chat_key, CACHE_TTL_CHAT_HISTORY, json.dumps(updated_history))

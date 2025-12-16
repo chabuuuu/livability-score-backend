@@ -4,7 +4,6 @@ sqlalchemy
 psycopg2-binary
 geoalchemy2
 shapely
-googlemaps
 python-dotenv
 schedule
 requests

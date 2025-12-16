@@ -1,3 +1,4 @@
+import os
 import schedule
 import time
 from sqlalchemy import text
@@ -7,6 +8,11 @@ from pipelines.first_step__osm_collector import run_osm_pipeline
 from pipelines.second_step__google_collector import run_google_pipeline
 from pipelines.third_step__targeted_collector import run_targeted_pipeline # <-- MỚI
 from pipelines.fourth_step__syncer import sync_data_to_main_table, cleanup_old_runs
+from dotenv import load_dotenv
+
+load_dotenv()
+
+CRON_SCHEDULE_HOURS = int(os.getenv("CRON_SCHEDULE_HOURS", 12))
 
 def job():
     print("\n\n######################################################")
@@ -17,13 +23,13 @@ def job():
     db = SessionLocal()
     try:
         # 1. Tạo Run ID mới
-        # result = db.execute(text("INSERT INTO run_collection_amenities DEFAULT VALUES RETURNING id"))
-        run_id = 1
-        # db.commit()
+        result = db.execute(text("INSERT INTO run_collection_amenities DEFAULT VALUES RETURNING id"))
+        run_id = result.scalar()
+        db.commit()
         print(f"=== CREATED RUN ID: {run_id} ===")
 
         # 2. Chạy OSM Pipeline (Cào diện rộng miễn phí)
-        # run_osm_pipeline(run_id, db)
+        run_osm_pipeline(run_id, db)
 
         # 3. Chạy Google Pipeline (Gap Analysis - Quét lỗ hổng có BĐS)
         run_google_pipeline(run_id, db)
@@ -51,9 +57,9 @@ def job():
 job()
 
 # Lên lịch
-schedule.every(12).hours.do(job)
+schedule.every(CRON_SCHEDULE_HOURS).hours.do(job)
 
-print("Service Amenity Collector đang chạy... (Schedule: 12h/lần)")
+print(f"Service Amenity Collector đang chạy... (Schedule: {CRON_SCHEDULE_HOURS}h/lần)")
 
 while True:
     schedule.run_pending()

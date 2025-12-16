@@ -39,6 +39,7 @@ class ChatPredictionRequest(BaseModel):
 class ChatMessageDTO(BaseModel):
     role: str
     text: str
+    created_at: datetime
 
 
 class PredictHistoryDTO(BaseModel):

@@ -447,8 +447,8 @@ async def chat_insight_stream(
             # Sau khi stream xong, lưu lại lịch sử vào Redis
             if full_response:
                 # Append tin nhắn mới
-                chat_history.append({"role": "user", "text": user_message, "created_at": datetime.now()})
-                chat_history.append({"role": "model", "text": full_response, "created_at": datetime.now()})
+                chat_history.append({"role": "user", "text": user_message, "created_at": datetime.now().isoformat()})
+                chat_history.append({"role": "model", "text": full_response, "created_at": datetime.now().isoformat()})
 
                 # Giữ lại tối đa 20 tin nhắn trong bộ nhớ Redis để không bị tràn
                 updated_history = chat_history[-20:]

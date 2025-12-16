@@ -202,8 +202,8 @@ async def chat_general_stream(
             
             if full_response:
                 # Lưu tin nhắn mới vào lịch sử
-                chat_history.append({"role": "user", "text": user_message, "created_at": datetime.now()})
-                chat_history.append({"role": "model", "text": full_response, "created_at": datetime.now()})
+                chat_history.append({"role": "user", "text": user_message, "created_at": datetime.now().isoformat()})
+                chat_history.append({"role": "model", "text": full_response, "created_at": datetime.now().isoformat()})
                 # Giữ 40 tin nhắn gần nhất
                 updated_history = chat_history[-40:]
                 redis_client.setex(chat_key, CACHE_TTL_CHAT_HISTORY, json.dumps(updated_history))

@@ -1,3 +1,4 @@
+from datetime import datetime
 import os
 import json
 import asyncio
@@ -446,9 +447,9 @@ async def chat_insight_stream(
             # Sau khi stream xong, lưu lại lịch sử vào Redis
             if full_response:
                 # Append tin nhắn mới
-                chat_history.append({"role": "user", "text": user_message})
-                chat_history.append({"role": "model", "text": full_response})
-                
+                chat_history.append({"role": "user", "text": user_message, "created_at": datetime.now().isoformat()})
+                chat_history.append({"role": "model", "text": full_response, "created_at": datetime.now().isoformat()})
+
                 # Giữ lại tối đa 20 tin nhắn trong bộ nhớ Redis để không bị tràn
                 updated_history = chat_history[-20:]
                 redis_client.setex(chat_history_key, CACHE_TTL_CHAT_HISTORY, json.dumps(updated_history))
@@ -462,6 +463,7 @@ async def chat_insight_stream(
 class ChatMessageDTO(BaseModel):
     role: str
     text: str
+    created_at: datetime
 
 @router.get("/chat/history/{property_id}", response_model=APIResponse[ChatMessageDTO])
 async def get_chat_history(

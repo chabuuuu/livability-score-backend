@@ -1,3 +1,4 @@
+from datetime import datetime
 import os
 import json
 import asyncio
@@ -384,8 +385,8 @@ async def chat_prediction_stream(
             
             # 4. Cập nhật Redis
             if full_response:
-                chat_history.append({"role": "user", "text": user_message})
-                chat_history.append({"role": "model", "text": full_response})
+                chat_history.append({"role": "user", "text": user_message, "created_at": datetime.now().isoformat()})
+                chat_history.append({"role": "model", "text": full_response, "created_at": datetime.now().isoformat()})
                 # Giữ lại tối đa 20 tin (bao gồm cả system context ở đầu)
                 # Đảm bảo phần tử đầu tiên (context) luôn được giữ
                 updated_history = [chat_history[0]] + chat_history[-19:]

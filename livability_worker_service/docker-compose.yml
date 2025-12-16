@@ -11,6 +11,10 @@ services:
       restart_policy:
         condition: on-failure
 
+      placement:
+        constraints:
+          - node.role == worker
+
       resources:
         limits:
           cpus: "0.2"

@@ -4,7 +4,7 @@ services:
   kltn-recommendation-service-be:
     image: kltn-recommendation-service-be:${IMAGE_VERSION}
     ports:
-      - "127.0.0.1:9094:8084"
+      - "9094:8084"
     env_file:
       - .env
 
@@ -32,6 +32,13 @@ services:
 
     volumes:
       - model_cache_data:/app/model_files
+
+    networks:
+      - kltn-shared-network
+
+networks:
+  kltn-shared-network:
+    external: true
 
 volumes:
   model_cache_data:

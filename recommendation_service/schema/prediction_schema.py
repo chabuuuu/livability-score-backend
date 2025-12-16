@@ -7,6 +7,7 @@ class PropertyPredictionRequest(BaseModel):
     latitude: float = Field(..., description="Vĩ độ", example=10.7725)
     longitude: float = Field(..., description="Kinh độ", example=106.6980)
     address_district: str = Field(..., description="Quận (VD: Quận 1, Quận 7)", example="Quận 1")
+    full_address: Optional[str] = Field(..., description="Địa chỉ đầy đủ", example="123 Đường ABC, Phường XYZ, Quận 1, TP.HCM")
 
     # Đặc điểm vật lý (Physical Attributes)
     area: float = Field(..., gt=0, description="Diện tích (m2)")
@@ -53,6 +54,7 @@ class PredictHistoryDTO(BaseModel):
     longitude: float
     latitude: float
     address_district: str
+    full_address: Optional[str] = None
 
     # Input Features
     area: float

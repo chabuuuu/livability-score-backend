@@ -5,7 +5,7 @@ services:
     image: ghcr.io/${GITHUB_REPOSITORY_OWNER_LOWERCASE}/user-service-be:${IMAGE_VERSION}
 
     ports:
-      - "9091:8080"
+      - "127.0.0.1:9091:8080"
 
     env_file:
       - .env

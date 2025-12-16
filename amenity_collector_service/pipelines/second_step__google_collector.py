@@ -6,9 +6,11 @@ import geopandas as gpd
 import googlemaps
 import numpy as np
 import osmnx as ox
-from shapely.geometry import Point, Polygon
+from shapely.geometry import Point, Polygon, MultiPolygon
 from sqlalchemy import text
 from dotenv import load_dotenv
+from datetime import datetime, timedelta, timezone
+from shapely import wkt
 
 # Import hàm lấy DB từ config mới
 from config.property_db_config import get_property_db
@@ -22,13 +24,11 @@ gmaps = googlemaps.Client(key=GOOGLE_API_KEY) if GOOGLE_API_KEY else None
 # Cấu hình Grid
 CELL_SIZE_DEGREES = 0.01  # Kích thước ô lưới (~1.1km)
 SEARCH_RADIUS_METERS = 750 # Bán kính tìm kiếm trong ô
-API_CALL_LIMIT = 2500      # Giới hạn số request Google mỗi lần chạy
+
+API_CALL_LIMIT = int(os.getenv("MAP_SECOND_STEP_CALL_LIMIT"))      # Giới hạn số request Google mỗi lần chạy
 
 DISTRICT_NAMES = [
-    # City
-    "Thủ Đức",
-
-    # Urban Districts
+    "Thủ Đức, Ho Chi Minh City, Vietnam",
     "District 1, Ho Chi Minh City, Vietnam",
     "District 2, Ho Chi Minh City, Vietnam",
     "District 3, Ho Chi Minh City, Vietnam",
@@ -46,8 +46,6 @@ DISTRICT_NAMES = [
     "Phu Nhuan District, Ho Chi Minh City, Vietnam",
     "Tan Binh District, Ho Chi Minh City, Vietnam",
     "Tan Phu District, Ho Chi Minh City, Vietnam",
-
-    # Rural Districts
     "Binh Chanh District, Ho Chi Minh City, Vietnam",
     "Can Gio District, Ho Chi Minh City, Vietnam",
     "Cu Chi District, Ho Chi Minh City, Vietnam",
@@ -56,34 +54,12 @@ DISTRICT_NAMES = [
 ]
 
 CATEGORY_TO_GOOGLE_TYPE = {
-    # 🏥 Sức khỏe & Y tế
-    # 'hospital', 'pharmacy', 'doctor', 'clinic', 'dentist' là các loại (type) chính thức.
     'healthcare': 'hospital|pharmacy|doctor|clinic|dentist|nursing_home|veterinary_care',
-
-    # 🎓 Giáo dục
-    # 'school', 'university' là loại chính. Thêm 'primary_school', 'secondary_school', 'kindergarten' 
-    # làm từ khóa để bắt các trường hợp OSM có thể đã bỏ lỡ.
     'education': 'school|university|primary_school|secondary_school|kindergarten|library|language_school',
-
-    # 🛍️ Mua sắm
-    # 'supermarket', 'convenience_store', 'shopping_mall', 'department_store' là các loại chính.
-    # 'market' (chợ) cũng là một loại.
     'shopping': 'supermarket|shopping_mall|convenience_store|market|department_store|book_store|clothing_store|electronics_store|hardware_store|furniture_store',
-
-    # 🚌 Giao thông
-    # 'bus_station', 'train_station', 'subway_station', 'airport', 'light_rail_station' là các loại chính.
     'transportation': 'bus_station|train_station|subway_station|airport|taxi_stand|ferry_terminal',
-
-    # 🌳 Môi trường & Không gian xanh
-    # 'park' là loại chính. 'natural_feature' có thể bao gồm sông, núi. 'tourist_attraction' thường bao gồm các công viên lớn.
     'environment': 'park|tourist_attraction|natural_feature|zoo|aquarium|botanical_garden',
-
-    # 🎭 Văn hóa & Giải trí
-    # 'restaurant', 'cafe', 'bar', 'movie_theater', 'museum', 'art_gallery' là các loại chính.
     'entertainment': 'restaurant|cafe|bar|night_club|movie_theater|museum|art_gallery|amusement_park|stadium|performing_arts_theater',
-
-    # 🏛️ Dịch vụ công & An ninh
-    # 'police', 'fire_station', 'post_office' là các loại chính.
     'public_safety': 'police|fire_station|post_office|city_hall|courthouse'
 }
 CATEGORIES = list(CATEGORY_TO_GOOGLE_TYPE.keys())
@@ -146,23 +122,109 @@ def load_osm_gdf_from_db(run_id, db_session):
         print(f"Error loading OSM from DB: {e}")
         return None
 
-def get_district_boundaries():
+def get_district_boundaries(db_session):
+    """
+    Lấy ranh giới quận.
+    - Ưu tiên lấy từ DB (bảng district_boundaries).
+    - Nếu DB trống hoặc dữ liệu cũ > 7 ngày -> Gọi OSM API tải mới và lưu vào DB.
+    """
+    print("--- [Google] Checking district boundaries cache...")
+    
+    # 1. Kiểm tra dữ liệu trong DB
+    try:
+        # Lấy thời gian update mới nhất
+        sql_check = text("SELECT MAX(updated_at) FROM district_boundaries")
+        last_update = db_session.execute(sql_check).scalar()
+        
+        is_stale = False
+        if last_update:
+            # Nếu dùng timezone aware (Postgres timestamptz), cần convert now() cho khớp
+            now = datetime.now(timezone.utc)
+            if (now - last_update).days > 7:
+                print(f"    -> Cache expired (Last update: {last_update}). Refreshing...")
+                is_stale = True
+            else:
+                print(f"    -> Cache valid (Last update: {last_update}). Loading from DB.")
+        else:
+            print("    -> Cache empty. Fetching from OSM...")
+            is_stale = True
+
+        # 2. Nếu Cache hợp lệ -> Load từ DB
+        if not is_stale:
+            sql_load = text("SELECT district_name, ST_AsText(geometry) as geometry FROM district_boundaries")
+            df = pd.read_sql(sql_load, db_session.bind)
+            
+            if not df.empty:
+                # Convert WKT string thành Shapely Geometry
+                df['geometry'] = df['geometry'].apply(wkt.loads)
+                return gpd.GeoDataFrame(df, geometry='geometry', crs="EPSG:4326")
+
+    except Exception as e:
+        print(f"    -> DB Error checking cache: {e}. Fallback to OSM fetch.")
+
+    # 3. Nếu Cache cũ hoặc trống -> Fetch từ OSM
     print("--- [Google] Fetching district boundaries from OSM (Network required)...")
     gdfs = []
+    
+    # Danh sách clean để insert
+    districts_to_save = []
+
     for name in DISTRICT_NAMES:
         try:
             gdf = ox.geocode_to_gdf(name)
-            gdf['district_name'] = name.split(',')[0]
+            # Lấy tên ngắn
+            short_name = name.split(',')[0]
+            gdf['district_name'] = short_name
+            
+            # Chuẩn bị geometry để lưu DB
+            geom = gdf.iloc[0].geometry
+            
+            # PostGIS yêu cầu đúng định dạng (thường là MultiPolygon)
+            # Nếu là Polygon đơn, convert sang MultiPolygon để đồng nhất
+            if geom.geom_type == 'Polygon':
+                geom = MultiPolygon([geom])
+            
+            districts_to_save.append({
+                "district_name": short_name,
+                "geometry": geom.wkt # Convert sang WKT text để insert
+            })
+            
             gdfs.append(gdf)
-        except Exception:
-            pass # Bỏ qua nếu lỗi mạng hoặc không tìm thấy
+            # time.sleep(1) # Nghỉ nhẹ để tránh OSM ban IP
+            
+        except Exception as e:
+            print(f"    -> Failed to fetch {name}: {e}")
     
     if not gdfs:
         return None
     
-    # Gộp và chỉ giữ lại cột cần thiết
-    combined = pd.concat(gdfs, ignore_index=True)
-    return gpd.GeoDataFrame(combined, crs="EPSG:4326")[['district_name', 'geometry']]
+    # Gộp GDF để trả về
+    combined_gdf = pd.concat(gdfs, ignore_index=True)
+    final_gdf = gpd.GeoDataFrame(combined_gdf, crs="EPSG:4326")[['district_name', 'geometry']]
+
+    # 4. Lưu vào DB (Upsert)
+    if districts_to_save:
+        print(f"    -> Saving {len(districts_to_save)} districts to DB...")
+        try:
+            for dist in districts_to_save:
+                # Sử dụng SQL thuần để Upsert (Insert on Conflict)
+                sql_upsert = text("""
+                    INSERT INTO district_boundaries (district_name, geometry, updated_at)
+                    VALUES (:name, ST_GeomFromText(:geom, 4326), NOW())
+                    ON CONFLICT (district_name) 
+                    DO UPDATE SET 
+                        geometry = EXCLUDED.geometry,
+                        updated_at = NOW();
+                """)
+                db_session.execute(sql_upsert, {"name": dist['district_name'], "geom": dist['geometry']})
+            
+            db_session.commit()
+            print("    -> Cache updated successfully.")
+        except Exception as e:
+            print(f"    -> Failed to save cache: {e}")
+            db_session.rollback()
+
+    return final_gdf
 
 def create_grid(districts_gdf):
     """Tạo lưới bao phủ các quận."""
@@ -232,73 +294,44 @@ def find_sparse_cells(grid_gdf, osm_gdf, props_gdf):
     
     return target_cells
 
-# --- MAIN PIPELINE FUNCTION ---
-
-def run_google_pipeline(run_id, db_session):
+def scan_target_cells(target_tasks, run_id, db_session, limit=API_CALL_LIMIT):
+    """
+    Hàm thực hiện quét Google Maps dựa trên danh sách các ô (tasks) được giao.
+    Có thể dùng cho Pipeline chính hoặc Targeted Pipeline.
+    """
     if not gmaps:
-        print("--- [Google] No API Key. Skipping Google Pipeline.")
-        return
+        print("--- [Google Scan] No API Key.")
+        return 0
 
-    print(f"--- [Google] Starting Pipeline for Run ID: {run_id} ---")
-    
-    # 1. Load Data
-    # Thay đổi: Gọi hàm load từ DB thay vì file
-    props_gdf = load_properties_from_db()
-    if props_gdf is None:
-        return
-
-    osm_gdf = load_osm_gdf_from_db(run_id, db_session)
-    # Lưu ý: osm_gdf có thể None nếu bước 1 OSM failed, vẫn chạy tiếp để Google cứu cánh
-    if osm_gdf is None:
-        osm_gdf = gpd.GeoDataFrame(columns=['category', 'geometry'], crs="EPSG:4326")
-
-    # 2. Prepare Grid
-    districts_gdf = get_district_boundaries()
-    if districts_gdf is None:
-        print("--- [Google] Could not load district boundaries from OSM. Aborting.")
-        return
-        
-    grid_gdf = create_grid(districts_gdf)
-    
-    # 3. Gap Analysis
-    target_tasks = find_sparse_cells(grid_gdf, osm_gdf, props_gdf)
-    print(f"--- [Google] Identified {len(target_tasks)} tasks (Cells * Categories) for scanning.")
-    
-    # 4. Fetch & Save
     api_calls = 0
     total_saved = 0
     
-    # Duyệt qua danh sách task
+    print(f"--- [Google Scan] Processing {len(target_tasks)} tasks...")
+
     for idx, row in target_tasks.iterrows():
-        if api_calls >= API_CALL_LIMIT:
-            print(f"--- [Google] Reached API limit ({API_CALL_LIMIT}). Stopping.")
+        if api_calls >= limit:
+            print(f"--- [Google Scan] Reached limit ({limit}). Stopping.")
             break
             
         category = row['category']
         keywords = CATEGORY_TO_GOOGLE_TYPE.get(category, "")
         
-        # Lấy tâm ô lưới để scan
         center = row['geometry'].centroid
         lat, lng = center.y, center.x
         
-        print(f"    -> [Call {api_calls+1}] Querying '{category}' at Cell {row['cell_id']} ({row['district_name']})...")
+        print(f"    -> [Call {api_calls+1}] Querying '{category}' at Cell {row['cell_id']} ({row.get('district_name', 'Unknown')})...")
         
         try:
-            # Gọi Google Maps API
-            # Lưu ý: keyword hỗ trợ logic OR bằng dấu '|' không chính thức trong python client,
-            # nhưng ta truyền chuỗi vào hy vọng client handle hoặc API hiểu.
-            # Tốt nhất dùng keyword parameter.
             places_result = gmaps.places_nearby(
                 location=(lat, lng),
                 radius=SEARCH_RADIUS_METERS,
-                keyword=keywords.replace("|", " OR "), # Thử dùng OR cho keyword search
-                type=keywords.split('|')[0], # Fallback type chính
+                keyword=keywords.replace("|", " OR "),
+                type=keywords.split('|')[0],
                 language='vi'
             )
             api_calls += 1
             
             results = places_result.get('results', [])
-            
             if not results:
                 time.sleep(1)
                 continue
@@ -308,14 +341,18 @@ def run_google_pipeline(run_id, db_session):
                 ploc = p['geometry']['location']
                 wkt_point = f"SRID=4326;POINT({ploc['lng']} {ploc['lat']})"
                 
-                # Check data integrity
                 if 'name' not in p: continue
 
+                # Logic chống trùng ngay tại bảng RAW:
+                # Nếu google_place_id đã có trong run_id này thì không insert nữa
+                # (Lưu ý: Logic này chỉ check trong memory của batch hiện tại hoặc cần query DB check tồn tại)
+                # Để đơn giản và nhanh, ta cứ insert, sau này Syncer sẽ lo việc distinct google_place_id
+                
                 insert_values.append({
                     "run_id": run_id,
                     "name": p.get('name'),
                     "category": category,
-                    "district": row['district_name'],
+                    "district": row.get('district_name', 'Unknown'),
                     "amenity_type": p.get('types', [])[0] if p.get('types') else 'unknown',
                     "longitude": ploc['lng'],
                     "latitude": ploc['lat'],
@@ -323,14 +360,14 @@ def run_google_pipeline(run_id, db_session):
                     "google_rating": p.get('rating'),
                     "google_types": json.dumps(p.get('types', [])),
                     "vicinity": p.get('vicinity'),
-                    "all_tags": json.dumps(p), # Lưu full response làm raw
+                    "all_tags": json.dumps(p),
                     "location": wkt_point
                 })
 
             if insert_values:
-                # Insert vào DB (google_raw_amenities)
-                # Ta insert hết, việc chống trùng lặp (nếu có trùng trong cùng 1 lần quét) sẽ do Syncer lo
-                # Hoặc bảng raw có thể chấp nhận trùng.
+                # Sử dụng ON CONFLICT DO NOTHING để chống trùng lặp trong cùng 1 RUN nếu lỡ quét lại vùng đó
+                # Yêu cầu bảng google_raw_amenities cần có UNIQUE CONSTRAINT (run_id, google_place_id) nếu muốn chặt chẽ
+                # Hoặc chỉ đơn giản insert, syncer xử lý sau.
                 sql = text("""
                     INSERT INTO google_raw_amenities 
                     (run_id, name, category, district, amenity_type, longitude, latitude, 
@@ -342,10 +379,35 @@ def run_google_pipeline(run_id, db_session):
                 db_session.commit()
                 total_saved += len(insert_values)
             
-            time.sleep(2) # Rate limit safety
+            time.sleep(2)
 
         except Exception as e:
             print(f"    -> [Google Error]: {e}")
-            # db_session.rollback() # Rollback nếu cần, nhưng ở đây ta commit từng batch
 
-    print(f"--- [Google] Completed. Total saved: {total_saved} places. API Calls: {api_calls}. ---")
+    return total_saved
+
+# --- MAIN PIPELINE FUNCTION ---
+def run_google_pipeline(run_id, db_session):
+    if not gmaps: return
+
+    print(f"--- [Google Pipeline] Start Gap Analysis for Run ID: {run_id} ---")
+    
+    # 1. Load Data (Properties & OSM Raw)
+    props_gdf = load_properties_from_db()
+    if props_gdf is None: return
+    
+    osm_gdf = load_osm_gdf_from_db(run_id, db_session)
+    if osm_gdf is None: osm_gdf = gpd.GeoDataFrame(columns=['category', 'geometry'], crs="EPSG:4326")
+
+    # 2. Grid & Analysis
+    districts_gdf = get_district_boundaries(db_session)
+    if districts_gdf is None: return
+    grid_gdf = create_grid(districts_gdf)
+    
+    # Tìm các ô thưa thớt
+    target_tasks = find_sparse_cells(grid_gdf, osm_gdf, props_gdf)
+    print(f"--- [Google Pipeline] Found {len(target_tasks)} sparse cells.")
+    
+    # 3. Scan
+    total = scan_target_cells(target_tasks, run_id, db_session, limit=API_CALL_LIMIT)
+    print(f"--- [Google Pipeline] Done. Saved {total} places. ---")

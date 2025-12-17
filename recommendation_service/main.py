@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 # Import các router
-from router import chat_router, insight_router, livability_router, prediction_router, recommendation_router, amenity_router
+from router import chat_router, insight_router, livability_router, prediction_router, recommendation_router, amenity_router, related_router
 
 app = FastAPI(title="Real Estate Recommendation Service")
 
@@ -22,6 +22,7 @@ app.include_router(livability_router.router)
 app.include_router(insight_router.router)
 app.include_router(prediction_router.router)
 app.include_router(chat_router.router)
+app.include_router(related_router.router)
 
 
 if __name__ == "__main__":

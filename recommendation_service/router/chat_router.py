@@ -52,7 +52,7 @@ class GeneralChatRequest(BaseModel):
 class ChatMessageDTO(BaseModel):
     role: str
     text: str
-    created_at: datetime
+    created_at: Optional[datetime] = None
 
 # --- AUTH HELPER ---
 def get_current_user_id(credentials: HTTPAuthorizationCredentials = Security(security)) -> int:

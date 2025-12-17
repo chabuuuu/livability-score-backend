@@ -2,6 +2,7 @@ from datetime import datetime
 import os
 import json
 import asyncio
+from typing import Optional
 import jwt
 from pydantic import BaseModel
 from config.property_db_config import get_property_db
@@ -463,7 +464,7 @@ async def chat_insight_stream(
 class ChatMessageDTO(BaseModel):
     role: str
     text: str
-    created_at: datetime
+    created_at: Optional[datetime] = None
 
 @router.get("/chat/history/{property_id}", response_model=APIResponse[ChatMessageDTO])
 async def get_chat_history(

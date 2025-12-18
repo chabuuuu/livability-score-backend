@@ -35,7 +35,7 @@ def crawl_news():
                 
                 try:
                     # Tìm kiếm tin tức
-                    results = ddgs.text(query, region='vn-vn', timelimit='m', max_results=1)
+                    results = ddgs.text(query, region='vn-vn', timelimit='m', max_results=5)
                     
                     for r in results:
                         url = r['href']

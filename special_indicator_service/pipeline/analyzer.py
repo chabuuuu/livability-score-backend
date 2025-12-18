@@ -3,6 +3,7 @@ import google.generativeai as genai
 from sqlalchemy import text
 
 from config.config import generate_content_smart
+from config.property_db_config import PropertySession
 from config.scoring_db_config import ScoringSession
 
 # Số lượng bài báo trong 1 request (Tùy chỉnh dựa trên độ dài trung bình bài báo)
@@ -155,10 +156,7 @@ def aggregate_and_propagate_scores(score_db):
     score_db.execute(agg_sql)
     score_db.commit()
     
-    # 2. Lan truyền Cross-DB (Logic cũ import PropertySession ở đây)
-    from config import PropertySession
-    from sqlalchemy import text
-    
+    # 2. Lan truyền Cross-DB (Logic cũ import PropertySession ở đây)    
     # Lấy danh sách quận có boundary
     districts = score_db.execute(text("""
         SELECT id, district_name, ST_AsText(boundary) as wkt, 

@@ -1,0 +1,11 @@
+sqlalchemy
+psycopg2-binary
+python-dotenv
+google-generativeai
+duckduckgo-search>=4.0.0
+newspaper3k
+schedule
+pandas
+osmnx
+shapely
+geoalchemy2

@@ -1,5 +1,5 @@
 # --- Stage 1: Builder (Dùng để compile code) ---
-FROM golang:1.23-alpine AS builder
+FROM golang:1.24-alpine AS builder
 
 # Cài đặt git (nếu cần tải dependency từ private repo)
 # RUN apk add --no-cache git

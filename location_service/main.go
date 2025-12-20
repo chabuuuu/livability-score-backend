@@ -17,6 +17,23 @@ import (
 	"github.com/robfig/cron/v3"
 )
 
+func CORSMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
+		c.Writer.Header().Set("Access-Control-Allow-Credentials", "true")
+		c.Writer.Header().Set("Access-Control-Allow-Headers", "Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization, accept, origin, Cache-Control, X-Requested-With")
+		c.Writer.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS, GET, PUT, DELETE")
+
+		// Nếu là method OPTIONS (Preflight), trả về 204 No Content và dừng luôn
+		if c.Request.Method == "OPTIONS" {
+			c.AbortWithStatus(204)
+			return
+		}
+
+		c.Next()
+	}
+}
+
 // Hàm helper để lấy UserID từ Bearer Token (Logic tương tự Python)
 func getUserIDFromToken(c *gin.Context) (string, error) {
 	// 1. Lấy header Authorization
@@ -125,6 +142,8 @@ func main() {
 
 	// 3. Khởi tạo API Server với Gin
 	r := gin.Default()
+
+	r.Use(CORSMiddleware())
 
 	// Endpoint Ping Vị trí (Yêu cầu Bearer Token)
 	r.POST("/api/v1/location/ping", func(c *gin.Context) {

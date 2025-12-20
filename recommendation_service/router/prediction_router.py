@@ -434,3 +434,33 @@ async def get_chat_history(
             result="Succeeded",
             data=ResponseData(items=[])
         )
+    
+@router.get("/property/{prediction_id}", response_model=APIDetailResponse[PredictHistoryDTO])
+async def get_prediction_detail(
+    prediction_id: str,
+    user_id: int = Depends(get_current_user_id),
+    db: Session = Depends(get_scoring_db)
+):
+    """
+    Lấy chi tiết kết quả dự đoán (giá, điểm số, insight) theo prediction_id.
+    """
+    if not user_id:
+        return APIDetailResponse(status="401", result="Failed", error="User not authenticated")
+
+    try:
+        # Tìm lịch sử dự đoán trong DB
+        history = db.query(PredictHistory).filter(
+            PredictHistory.prediction_id == prediction_id,
+            PredictHistory.user_id == user_id
+        ).first()
+
+        if not history:
+            return APIDetailResponse(status="404", result="Failed", error="Prediction not found")
+
+        return APIDetailResponse(
+            status="200",
+            result="Succeeded",
+            data=PredictHistoryDTO.model_validate(history)
+        )
+    except Exception as e:
+        return APIDetailResponse(status="500", result="Failed", error=str(e))

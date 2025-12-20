@@ -23,7 +23,7 @@ type PropertyLivabilityScore struct {
 
 // Request từ Mobile App gửi lên
 type UserLocationRequest struct {
-	UserID    string  `json:"user_id" binding:"required"`
+	UserID    string  `json:"-"`
 	Latitude  float64 `json:"latitude" binding:"required"`
 	Longitude float64 `json:"longitude" binding:"required"`
 }

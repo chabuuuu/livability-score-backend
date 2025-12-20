@@ -5,6 +5,9 @@ from config.scoring_db_config import ScoringSession
 from initializer import init_district_boundaries
 from pipeline.crawler import crawl_news
 from pipeline.analyzer import aggregate_and_propagate_scores, analyze_and_map_news
+from dotenv import load_dotenv
+
+load_dotenv()
 
 # Flag chạy init
 if os.getenv("RUN_INIT_ON_START", "true").lower() == "true":

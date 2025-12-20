@@ -1,10 +1,11 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import List, Optional
 from datetime import datetime
 
 # Request Body: Danh sách ID cần lấy
 class BatchScoreRequest(BaseModel):
     propertyIds: List[int]
+    include_special_factors: bool = Field(default=True, description="Có tính thêm các chỉ số đặc biệt (Ngập, Tai nạn, Tiềm năng) hay không")
 
 # Response DTO
 class LivabilityScoreDTO(BaseModel):
@@ -28,6 +29,11 @@ class LivabilityScoreDTO(BaseModel):
     score_environment: Optional[float]
     score_entertainment: Optional[float]
     score_safety: Optional[float]
+
+    # --- NEW: SPECIAL IMPACT SCORES ---
+    flood_impact_score: float = Field(default=0.0, description="Điểm trừ do ngập lụt")
+    accident_impact_score: float = Field(default=0.0, description="Điểm trừ do tai nạn/an ninh")
+    future_project_score: float = Field(default=0.0, description="Điểm cộng tiềm năng hạ tầng")
 
     # --- NEW FIELD ---
     livability_score: float = 0.0  # Điểm tổng hợp cuối cùng

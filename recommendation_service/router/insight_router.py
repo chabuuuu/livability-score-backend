@@ -49,6 +49,7 @@ def get_next_key():
 
 # --- 2. CẤU HÌNH MODEL POOL (Fallback) ---
 FALLBACK_MODELS = [
+    "gemini-3-flash-preview",
     "gemini-2.5-flash",
     "gemini-2.5-flash-lite", 
     "gemini-robotics-er-1.5-preview"
@@ -266,26 +267,6 @@ async def analyze_livability_stream(
         # 3. Call AI
         nearby_context = get_nearby_amenities_with_cache(scoring_db, property_db, property_id)
 
-        # prompt = f"""
-        # Bạn là chuyên gia BĐS. Phân tích Livability Score cho khách hàng #{user_id}:
-        # - Y tế: {score_record.score_healthcare} ({score_record.dist_healthcare}m)
-        # - Giáo dục: {score_record.score_education} ({score_record.dist_education}m)
-        # - Mua sắm: {score_record.score_shopping} ({score_record.count_shopping} quán)
-        # - Giao thông: {score_record.score_transportation} ({score_record.dist_transportation}m)
-        # - Môi trường: {score_record.score_environment} ({score_record.dist_environment}m)
-        # - Giải trí: {score_record.score_entertainment} ({score_record.count_entertainment} quán)
-        # - An ninh: {score_record.score_safety} ({score_record.dist_safety}m)
-
-        # Context địa điểm:
-        # 1. Y tế: {nearby_context.get('healthcare')}
-        # 2. Giáo dục: {nearby_context.get('education')}
-        # 3. Mua sắm: {nearby_context.get('shopping')}
-        # 4. Môi trường: {nearby_context.get('environment')}
-        # 5. Giao thông: {nearby_context.get('transportation')}
-
-        # Hãy viết nhận xét ngắn gọn (150 từ), giọng chuyên nghiệp. Nêu rõ điểm mạnh/yếu, nhắc tên địa điểm cụ thể và kết luận phù hợp với ai.
-        # """
-
         prompt = f"""
         Bạn là một chuyên gia phân tích bất động sản tại Việt Nam. 
         Hãy phân tích và giải thích "Chỉ số đáng sống" (Livability Score) cho một bất động sản dựa trên dữ liệu dưới đây.
@@ -298,6 +279,11 @@ async def analyze_livability_stream(
         - Môi trường/Công viên: {score_record.score_environment} (Khoảng cách: {score_record.dist_environment}m)
         - Giải trí: {score_record.score_entertainment} (Số lượng quán quanh 1km: {score_record.count_entertainment})
         - An ninh: {score_record.score_safety} (Khoảng cách đồn CA: {score_record.dist_safety}m)
+
+        --- CHỈ SỐ ĐẶC BIỆT (Tác động từ tin tức thực tế) ---
+        - Ngập lụt (Điểm trừ): {score_record.flood_impact_score or 0} (Nếu cao nghĩa là khu vực này thường xuyên có tin ngập)
+        - Tai nạn/An ninh (Điểm trừ): {score_record.accident_impact_score or 0} (Nếu cao nghĩa là có tin về tai nạn hoặc an ninh kém)
+        - Tiềm năng phát triển (Điểm cộng): {score_record.future_project_score or 0} (Nếu cao nghĩa là có tin về dự án hạ tầng sắp triển khai)
 
         --- ĐỊA ĐIỂM THỰC TẾ XUNG QUANH (Context) ---
         Biết rằng xung quanh bất động sản này có các địa điểm nổi bật sau:
@@ -315,8 +301,11 @@ async def analyze_livability_stream(
         --- YÊU CẦU ---
         Hãy viết một đoạn nhận xét ngắn gọn (khoảng 150-200 từ) bằng tiếng Việt, giọng văn chuyên nghiệp nhưng gần gũi:
         1. Đánh giá tổng quan: Khu vực này mạnh về điểm gì, yếu về điểm gì?
-        2. Chi tiết đắt giá: Hãy nhắc tên cụ thể các địa điểm (ví dụ: "Lợi thế lớn nhất là nằm ngay sát Bệnh viện X và gần Trường Y...").
-        3. Kết luận: Khu vực này phù hợp với ai (Gia đình trẻ, người độc thân, người già...)?
+        2. Phân tích Tác động Đặc biệt: 
+           - Nếu có điểm trừ ngập lụt/tai nạn: Hãy cảnh báo khéo léo người mua cần lưu ý.
+           - Nếu có điểm cộng tiềm năng: Hãy nhấn mạnh đây là cơ hội đầu tư tốt nhờ hạ tầng tương lai.
+        3. Chi tiết đắt giá: Hãy nhắc tên cụ thể các địa điểm (ví dụ: "Lợi thế lớn nhất là nằm ngay sát Bệnh viện X và gần Trường Y...").
+        4. Kết luận: Khu vực này phù hợp với ai (Gia đình trẻ, người độc thân, người già...)?
         
         Lưu ý: Bạn hãy vận dụng kiến thức thực tế sẵn có của mình hoặc tìm kiếm trên internet về các địa điểm trên (về quy mô, uy tín, chất lượng chuyên môn...) để đưa ra nhận xét sâu sắc và chính xác, không bịa đặt thông tin.
         """
@@ -325,19 +314,6 @@ async def analyze_livability_stream(
         print(prompt)
 
         full_response_buffer = "" 
-
-        # try:
-        #     response = await model.generate_content_async(prompt, stream=True)
-        #     async for chunk in response:
-        #         if chunk.text:
-        #             yield json.dumps({"type": "content", "text": chunk.text}) + "\n"
-        #             full_response_buffer += chunk.text
-            
-        #     if full_response_buffer:
-        #         redis_client.setex(ai_cache_key, CACHE_TTL_AI, full_response_buffer)
-                
-        # except Exception as e:
-        #     yield json.dumps({"type": "error", "message": str(e)}) + "\n"
 
         try:
             async for chunk in generate_content_safe(prompt):
@@ -370,6 +346,11 @@ async def chat_insight_stream(
     """
     property_id = payload.property_id
     user_message = payload.message
+
+    # 1. Lấy dữ liệu điểm số mới nhất để đưa vào context chat (quan trọng để AI biết các chỉ số đặc biệt)
+    score_record = scoring_db.query(PropertyLivabilityScore).filter(
+        PropertyLivabilityScore.property_id == property_id
+    ).first()
 
     # 1. Lấy Context từ Redis (Cache Lớp 1 - Raw Data)
     # Nếu không có trong Redis thì query lại DB
@@ -405,6 +386,11 @@ async def chat_insight_stream(
     chat_prompt = f"""
     Bạn là một trợ lý AI chuyên về bất động sản. Bạn đang hỗ trợ khách hàng #{user_id} tìm hiểu về một căn nhà.
     
+    --- CHỈ SỐ ĐẶC BIỆT CỦA CĂN NHÀ ---
+    - Điểm trừ Ngập lụt: {score_record.flood_impact_score if score_record else 0}
+    - Điểm trừ Tai nạn: {score_record.accident_impact_score if score_record else 0}
+    - Điểm cộng Tiềm năng: {score_record.future_project_score if score_record else 0}
+
     --- DỮ LIỆU THỰC TẾ (Context) ---
     Đây là các tiện ích xung quanh căn nhà (đã được xác thực):
     - Y tế: {raw_context.get('healthcare', 'Không rõ')}
@@ -425,16 +411,9 @@ async def chat_insight_stream(
     --- YÊU CẦU ---
     Hãy trả lời câu hỏi của khách hàng một cách ngắn gọn, súc tích và hữu ích. 
     Nếu khách hàng hỏi về thông tin có trong Context, hãy dùng nó để trả lời chính xác.
+    Nếu khách hàng hỏi về ngập lụt, tai nạn hay quy hoạch, hãy dựa vào các "Chỉ số đặc biệt" ở trên để trả lời (ví dụ điểm ngập cao thì cảnh báo).
     Nếu câu hỏi nằm ngoài Context (ví dụ: phong thủy, giá đất tương lai), hãy trả lời dựa trên kiến thức chung của bạn nhưng cần lưu ý là tham khảo.
     """
-
-    # async def generate_chat_stream():
-    #     try:
-    #         async for chunk in generate_content_safe(chat_prompt):
-    #             if chunk.text:
-    #                 yield json.dumps({"type": "content", "text": chunk.text}) + "\n"
-    #     except Exception as e:
-    #         yield json.dumps({"type": "error", "message": str(e)}) + "\n"
 
     async def generate_chat_stream():
         full_response = ""

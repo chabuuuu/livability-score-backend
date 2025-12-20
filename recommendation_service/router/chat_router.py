@@ -30,6 +30,7 @@ def get_next_key():
     except: raise Exception("No API Keys available")
 
 FALLBACK_MODELS = [
+    "gemini-3-flash-preview",
     "gemini-2.5-flash",
     "gemini-2.5-flash-lite", 
     "gemini-robotics-er-1.5-preview"

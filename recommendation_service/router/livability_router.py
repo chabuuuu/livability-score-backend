@@ -120,19 +120,40 @@ def fetch_user_weights(user_id: int) -> Dict[str, float]:
     return DEFAULT_WEIGHTS
 
 # --- LOGIC TÍNH TOÁN ---
-def calculate_overall_score(score_obj: PropertyLivabilityScore, weights: dict) -> float:
+def calculate_overall_score(score_obj: PropertyLivabilityScore, weights: dict, include_special: bool = True) -> float:
     total_score = 0.0
     def get_val(val): return float(val) if val is not None else 0.0
 
+    # 1. Lấy điểm tác động đặc biệt (Nếu user yêu cầu)
+    flood_penalty = 0.0
+    accident_penalty = 0.0
+    potential_bonus = 0.0
+
+    if include_special:
+        flood_penalty = get_val(score_obj.flood_impact_score)
+        accident_penalty = get_val(score_obj.accident_impact_score)
+        potential_bonus = get_val(score_obj.future_project_score)
+
+    # 2. Điều chỉnh điểm thành phần
+    # Giao thông bị ảnh hưởng bởi ngập lụt
+    adj_transportation = max(0, get_val(score_obj.score_transportation) - flood_penalty)
+    
+    # An ninh bị ảnh hưởng bởi tai nạn giao thông
+    adj_safety = max(0, get_val(score_obj.score_safety) - accident_penalty)
+
+    # 3. Tính tổng có trọng số
     total_score += get_val(score_obj.score_healthcare) * weights.get('score_healthcare', 0)
     total_score += get_val(score_obj.score_education) * weights.get('score_education', 0)
     total_score += get_val(score_obj.score_shopping) * weights.get('score_shopping', 0)
-    total_score += get_val(score_obj.score_transportation) * weights.get('score_transportation', 0)
+    total_score += adj_transportation * weights.get('score_transportation', 0) 
     total_score += get_val(score_obj.score_environment) * weights.get('score_environment', 0)
     total_score += get_val(score_obj.score_entertainment) * weights.get('score_entertainment', 0)
-    total_score += get_val(score_obj.score_safety) * weights.get('score_safety', 0)
+    total_score += adj_safety * weights.get('score_safety', 0)
 
-    return round(total_score, 2)
+    # 4. Cộng điểm tiềm năng
+    total_score += potential_bonus
+
+    return round(min(100, total_score), 2)
 
 # --- API ENDPOINT ---
 @router.post("/scores/batch", response_model=APIResponse[LivabilityScoreDTO])
@@ -141,35 +162,26 @@ def get_batch_livability_scores(
     user_id: Optional[int] = Depends(get_current_user_id_optional),
     db: Session = Depends(get_scoring_db)
 ):
-    """
-    Lấy điểm số Livability cho danh sách BĐS.
-    - Nếu có Token: Tính điểm dựa trên Profile người dùng (Personalized).
-    - Nếu không Token: Tính điểm dựa trên trọng số mặc định (General).
-    """
     try:
-        # payload.propertyIds khớp với schema Pydantic (snake_case)
         if not payload.propertyIds:
             return APIResponse(status="200", result="Succeeded", data=ResponseData(items=[]))
 
-        # 1. Xác định trọng số (Weights)
-        # Nếu có user_id, gọi User Service để lấy preference
         weights = fetch_user_weights(user_id) if user_id else DEFAULT_WEIGHTS
-        
-        print(f"Using weights: {weights}")
 
-        # 2. Query Database lấy điểm thành phần (Component Scores)
         scores = db.query(PropertyLivabilityScore).filter(
-            PropertyLivabilityScore.property_id.in_(payload.propertyIds),
-            PropertyLivabilityScore.delete_at.is_(None)
+            PropertyLivabilityScore.property_id.in_(payload.propertyIds)
         ).all()
 
-        # 3. Tính toán & Mapping
         results = []
         for score_record in scores:
             dto = LivabilityScoreDTO.model_validate(score_record)
             
-            # Tính Livability Score cá nhân hóa
-            dto.livability_score = calculate_overall_score(score_record, weights)
+            # Truyền thêm tham số include_special từ payload
+            dto.livability_score = calculate_overall_score(
+                score_record, 
+                weights, 
+                include_special=payload.include_special_factors
+            )
             
             results.append(dto)
 
@@ -180,5 +192,4 @@ def get_batch_livability_scores(
         )
 
     except Exception as e:
-        # print(f"Error fetching batch scores: {e}")
         return APIResponse(status="500", result="Failed", error=str(e))

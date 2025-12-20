@@ -129,6 +129,8 @@ func main() {
 	// 1. Khởi tạo DB
 	database.Init()
 
+	service.InitFirebase()
+
 	// 2. Khởi tạo Background Worker (Cronjob)
 	c := cron.New()
 	_, err = c.AddFunc("@every 10m", func() {
@@ -178,6 +180,37 @@ func main() {
 		}
 
 		c.JSON(http.StatusOK, gin.H{"status": "success"})
+	})
+
+	r.POST("/api/v1/location/user/fcm", func(c *gin.Context) {
+		// 1. Xác thực User
+		userID, err := getUserIDFromToken(c)
+		if err != nil {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized: " + err.Error()})
+			return
+		}
+		if userID == "0" || userID == "" {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid User ID in token"})
+			return
+		}
+
+		// 2. Parse Body
+		var req model.FCMTokenRequest
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid JSON format: " + err.Error()})
+			return
+		}
+
+		// 3. Gọi Service Lưu Token vào Redis
+		err = service.SaveFCMToken(userID, req.Token)
+		if err != nil {
+			log.Printf("❌ Lỗi lưu FCM token cho user %s: %v", userID, err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save token"})
+			return
+		}
+
+		log.Printf("✅ Đã lưu FCM Token cho UserID: %s", userID)
+		c.JSON(http.StatusOK, gin.H{"status": "success", "message": "FCM Token saved"})
 	})
 
 	port := os.Getenv("PORT")

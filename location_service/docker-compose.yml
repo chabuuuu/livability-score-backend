@@ -1,0 +1,38 @@
+version: "3.9"
+
+services:
+  kltn-location-service-be:
+    image: ghcr.io/${GITHUB_REPOSITORY_OWNER_LOWERCASE}/location-service-be:${IMAGE_VERSION}
+    ports:
+      - "127.0.0.1:9095:8085"
+    env_file:
+      - .env
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+
+      placement:
+        constraints:
+          - node.role == worker
+
+      resources:
+        limits:
+          cpus: "0.6"
+          memory: 700M
+
+        reservations:
+          cpus: "0.4"
+          memory: 356M
+
+      update_config:
+        parallelism: 1
+        delay: 10s
+        order: stop-first
+
+    networks:
+      - kltn-shared-network
+
+networks:
+  kltn-shared-network:
+    external: true

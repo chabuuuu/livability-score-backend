@@ -1,0 +1,14 @@
+.git
+.gitignore
+.env
+.idea
+.vscode
+vendor
+bin
+*.exe
+*.test
+README.md
+Dockerfile
+docker-compose.yml
+node_modules
+dist

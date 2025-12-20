@@ -150,7 +150,7 @@ def aggregate_and_propagate_scores(score_db):
         SET 
             flood_impact_score = LEAST((SELECT COALESCE(SUM(impact_score), 0) FROM news_articles WHERE district_id = d.id AND topic = 'FLOOD' AND published_date > NOW() - INTERVAL '30 days') * 0.5, 20),
             accident_impact_score = LEAST((SELECT COALESCE(SUM(impact_score), 0) FROM news_articles WHERE district_id = d.id AND topic = 'ACCIDENT' AND published_date > NOW() - INTERVAL '30 days') * 0.3, 15),
-            future_project_score = LEAST((SELECT COALESCE(SUM(impact_score), 0) FROM news_articles WHERE district_id = d.id AND topic = 'PROJECT' AND sentiment = 'POSITIVE') * 0.8, 30),
+            future_project_score = LEAST((SELECT COALESCE(SUM(impact_score), 0) FROM news_articles WHERE district_id = d.id AND topic = 'PROJECT' AND sentiment = 'POSITIVE') * 0.05, 10),
             last_analyzed_at = NOW()
     """)
     score_db.execute(agg_sql)

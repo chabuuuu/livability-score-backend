@@ -1,5 +1,5 @@
 # --- Stage 1: Builder (Dùng để compile code) ---
-FROM golang:1.22-alpine AS builder
+FROM golang:1.23-alpine AS builder
 
 # Cài đặt git (nếu cần tải dependency từ private repo)
 # RUN apk add --no-cache git
@@ -29,9 +29,8 @@ RUN apk --no-cache add ca-certificates tzdata
 # Copy binary từ stage builder sang
 COPY --from=builder /app/location-service .
 
-# Copy file CA Certificate nếu bạn đóng gói cứng vào image (Optional)
-# Nếu dùng Volume mount thì không cần dòng này
-# COPY ca.pem .
+RUN mkdir -p certs
+COPY certs/ca.pem ./certs/ca.pem
 
 # Copy file .env nếu muốn (thường thì nên inject qua environment variable của Docker/K8s an toàn hơn)
 # COPY .env .

@@ -44,7 +44,7 @@ class ChatMessageDTO(BaseModel):
 
 class PredictHistoryDTO(BaseModel):
     prediction_id: str
-    created_at: datetime
+    created_at: Optional[datetime] = None
     address_district: str
     area: float
     property_type: str

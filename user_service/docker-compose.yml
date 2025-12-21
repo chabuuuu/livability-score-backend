@@ -17,7 +17,7 @@ services:
 
       placement:
         constraints:
-          - node.role == worker
+          - node.role == manager
 
       resources:
         limits:

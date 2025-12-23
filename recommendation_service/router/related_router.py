@@ -203,6 +203,15 @@ def get_related_properties(
         final_items = []
         for item in ranked_candidates[:limit]:
             p = item["prop"]
+
+            thumb = None 
+            
+            # Kiểm tra xem list images có tồn tại và có phần tử không
+            if p.images and len(p.images) > 0:
+                thumb = p.images[0].image_url
+            else:
+                thumb = None
+
             card = PropertyCard(
                 id=p.id,
                 title=p.title,
@@ -212,7 +221,7 @@ def get_related_properties(
                 address=f"{p.address_street or ''}, {p.address_district or ''}",
                 num_bedrooms=p.num_bedrooms,
                 num_bathrooms=p.num_bathrooms,
-                thumbnail_url=p.source_url,
+                thumbnail_url=thumb,
                 distance_km=round(item["dist"] / 1000, 2),
                 recommendation_type="HYBRID_RELATED",
                 view_count=p.view_count,

@@ -32,7 +32,14 @@ class PropertyCard(BaseModel):
 # --- Helper Function ---
 def map_to_schema(prop_obj, distance_meters, rec_type):
     full_addr = f"{prop_obj.address_street or ''}, {prop_obj.address_ward or ''}, {prop_obj.address_district or ''}"
-    thumb = prop_obj.source_url
+
+    thumb = None 
+    
+    # Kiểm tra xem list images có tồn tại và có phần tử không
+    if prop_obj.images and len(prop_obj.images) > 0:
+        thumb = prop_obj.images[0].image_url
+    else:
+        thumb = None
     
     return PropertyCard(
         id=prop_obj.id,

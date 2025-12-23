@@ -85,7 +85,6 @@ def get_current_user_id(credentials: HTTPAuthorizationCredentials = Security(sec
             options={"verify_exp": True} # Bắt buộc check hết hạn
         )
         
-        # 2. Parse thông tin User (Do cấu trúc đặc thù của payload bạn gửi)
         # Payload mẫu: {"user": "{\"userId\":1, ...}", ...}
         user_str = payload.get("user")
         if not user_str:
@@ -201,15 +200,11 @@ async def generate_content_safe(prompt: str):
                 current_key = get_next_key()
                 
                 # 2. Configure lại GenAI với key này
-                # Lưu ý: genai.configure là toàn cục, trong môi trường async concurrency cao có thể bị race condition nhẹ
-                # nhưng với tính chất retry của hàm này thì chấp nhận được.
                 genai.configure(api_key=current_key)
                 
                 # 3. Khởi tạo Model
                 current_model = genai.GenerativeModel(model_name=model_name)
                 
-                # 4. Gọi API
-                # print(f"DEBUG: Trying {model_name} with key ...{current_key[-4:]} (Attempt {attempt+1})")
                 response = await current_model.generate_content_async(prompt, stream=True)
                 
                 # 5. Yield kết quả (Thành công!)

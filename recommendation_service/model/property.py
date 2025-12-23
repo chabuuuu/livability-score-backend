@@ -1,8 +1,15 @@
-from sqlalchemy import Column, Integer, String, Numeric, Text, BigInteger, JSON, DateTime
+from sqlalchemy import Column, ForeignKey, Integer, String, Numeric, Text, BigInteger, JSON, DateTime
 from geoalchemy2 import Geometry
 import datetime
-
+from sqlalchemy.orm import relationship
 from config.property_db_config import Base
+
+class PropertyImage(Base):
+    __tablename__ = "property_images"
+
+    id = Column(BigInteger, primary_key=True, index=True)
+    property_id = Column(BigInteger, ForeignKey("properties.id", ondelete="CASCADE"), nullable=False)
+    image_url = Column(Text, nullable=False)
 
 class Property(Base):
     __tablename__ = "properties"
@@ -40,3 +47,5 @@ class Property(Base):
     
     posted_at = Column(DateTime(timezone=True))
     created_at = Column(DateTime(timezone=True), default=datetime.datetime.utcnow)
+
+    images = relationship("PropertyImage", primaryjoin="Property.id == PropertyImage.property_id", viewonly=True)

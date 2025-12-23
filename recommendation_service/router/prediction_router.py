@@ -151,7 +151,6 @@ async def predict_property_price(
         predicted_price = PriceModel.predict(df_ordered)
         price_billions = predicted_price / 1_000_000_000
 
-        # 3. Lấy Context Tiện ích thực tế (Để AI chém gió có cơ sở)
         amenity_context = get_amenities_context_by_coords(scoring_db, payload.latitude, payload.longitude)
 
         # 4. Tạo Prompt cho Gemini

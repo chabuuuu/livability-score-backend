@@ -67,7 +67,7 @@ public class SecurityUtil {
         return builder
                 .withIssuedAt(new Date())
                 .withIssuer(ISSUER)
-                .withExpiresAt(new Date(System.currentTimeMillis() + THIRTY_MINUTES)) // 30 phút
+                .withExpiresAt(new Date(System.currentTimeMillis() + SEVEN_DAYS)) // 7 ngày
                 .sign(ALGORITHM);
     }
 

@@ -2,10 +2,11 @@ sqlalchemy
 psycopg2-binary
 python-dotenv
 google-generativeai
-duckduckgo-search>=4.0.0
+ddgs
 newspaper3k
 schedule
 pandas
 osmnx
 shapely
 geoalchemy2
+lxml_html_clean

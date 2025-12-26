@@ -52,4 +52,6 @@ public class UserGetMeResponse {
   private BigDecimal preferenceEntertainment;
 
   private String liveAddress;
+
+  private Boolean verifiedPhone = false;
 }

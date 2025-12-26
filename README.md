@@ -44,16 +44,6 @@ The backend is engineered for scalability and specialized performance, utilizing
 
 ---
 
-## 🛠 Tech Stack & Infrastructure
-*   **Primary Databases:** PostgreSQL with **PostGIS** extension for geometric calculations (`ST_Within`, `ST_Buffer`).
-*   **In-Memory Intelligence:** **Redis** for pub/sub messaging (triggering score recalculations), session caching, and Geo-spatial indexing.
-*   **AI/LLM Stack:** Google Gemini API for unstructured data extraction, Scikit-learn, and LightGBM for regression.
-*   **Storage:** **MinIO** for object storage (Media + ML Model weights).
-*   **Gateway:** **Nginx** for reverse proxy and load balancing.
-*   **Infrastructure:** Fully containerized via **Docker**.
-
----
-
 ## 📊 Methodology Highlights
 
 ### Spatial Propagation of News

@@ -42,20 +42,6 @@ The backend is engineered for scalability and specialized performance, utilizing
 | **Amenity Collector** | Python (Pandas/GeoPandas) | Automated ETL pipelines for urban infrastructure enrichment. |
 | **Media Service** | Node.js (TypeScript) | Efficient handling of high-volume image/video uploads to **MinIO**. |
 
----
-
-## 📊 Methodology Highlights
-
-### Spatial Propagation of News
-When a localized news event (e.g., a flood in a specific district) is analyzed by the **Special Indicator Service**, the impact is automatically propagated to all properties within that administrative boundary using spatial join logic:
-```sql
-UPDATE property_livability_scores 
-SET flood_score = impact_score 
-FROM district_special_stats 
-WHERE ST_Within(property.location, district.boundary);
-```
-This ensures the "Livability Score" is a living, breathing metric.
-
 ### Explainable Chatbot
 The system integrates a **Context-Aware Chatbot** that doesn't just provide numbers. It pulls surrounding amenity data and news impacts to explain: *"This property has a high safety score because it is within 500m of a police station, but the transport score is lower due to recent flood reports in this sector"*.
 

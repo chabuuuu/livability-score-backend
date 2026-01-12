@@ -5,7 +5,6 @@ import time
 from sqlalchemy import text
 from shapely import wkt
 
-# Cấu hình danh sách quận và tag (như code cũ của bạn)
 DISTRICTS = [
     # City
     "Thủ Đức",

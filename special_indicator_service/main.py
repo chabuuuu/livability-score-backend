@@ -16,7 +16,8 @@ if os.getenv("RUN_INIT_ON_START", "true").lower() == "true":
 def job():
     print("\n>>> START SPECIAL INDICATOR PIPELINE <<<")
     # 1. Thu thập (vào Scoring DB)
-    count = crawl_news()
+    # count = crawl_news()
+    count = 0;
     
     # 2. Phân tích & Cross-DB Update
     if count > 0:

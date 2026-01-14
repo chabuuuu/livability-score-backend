@@ -1,26 +1,95 @@
 import json
+import math
 import google.generativeai as genai
 from sqlalchemy import text
 
 from config.config import generate_content_smart
 from config.property_db_config import PropertySession
 from config.scoring_db_config import ScoringSession
+from sqlalchemy import text
+from geoalchemy2 import Geometry 
+# Số lượng bài báo trong 1 request
+BATCH_SIZE = 10 
 
-# Số lượng bài báo trong 1 request (Tùy chỉnh dựa trên độ dài trung bình bài báo)
-BATCH_SIZE = 13 
+# --- FORMULA ---
+
+def calculate_flood_score(depth_cm, duration_h, location_scope):
+    """
+    Tính điểm ngập lụt (Negative).
+    S = min(10, (D/Dmax * wd) + (T/Tmax * wt) + alpha)
+    """
+    D_max = 50.0  # cm
+    T_max = 4.0   # giờ
+    w_d = 6.0
+    w_t = 3.0
+    
+    # scope: 1 (Hẻm/Cục bộ), 2 (Đường chính), 3 (Diện rộng) -> map sang alpha
+    # Input scope từ AI có thể là int 1, 2, 3
+    alpha = 0
+    if location_scope == 2: alpha = 1.0
+    elif location_scope == 3: alpha = 2.0
+    
+    # Tính toán
+    term_d = (min(depth_cm, D_max * 1.5) / D_max) * w_d # Cap depth để không quá lớn
+    term_t = (min(duration_h, T_max * 1.5) / T_max) * w_t
+    
+    score = term_d + term_t + alpha
+    return min(10.0, score)
+
+def calculate_accident_score(fatalities, injuries, vehicles):
+    """
+    Tính điểm tai nạn (Negative).
+    S = min(10, 5*dead + 1.5*injured + 0.5*vehicles)
+    """
+    w_f = 5.0
+    w_i = 1.5
+    w_v = 0.5
+    
+    score = (w_f * fatalities) + (w_i * injuries) + (w_v * vehicles)
+    return min(10.0, score)
+
+def calculate_project_score(capital_billion, status_str, type_str):
+    """
+    Tính điểm tiềm năng dự án (Positive).
+    S = min(10, log10(C + 10) * K_status * K_type)
+    """
+    # Mapping hệ số
+    K_status = 0.3 # Default PROPOSAL
+    if status_str == 'APPROVED': K_status = 0.5
+    elif status_str == 'ONGOING': K_status = 0.8
+    elif status_str == 'NEAR_FINISH': K_status = 1.0
+    
+    K_type = 0.5 # Default OTHER
+    if type_str == 'METRO': K_type = 1.5
+    elif type_str == 'BRIDGE_ROAD': K_type = 1.2
+    elif type_str == 'EXPANSION': K_type = 0.8
+    
+    # Công thức
+    # Thêm 10 vào capital để tránh log số nhỏ/âm và tạo nền
+    # log10(100 tỷ) = 2, log10(1000 tỷ) = 3, log10(10000 tỷ) = 4
+    base_val = math.log10(max(1, capital_billion) + 10)
+    
+    score = base_val * K_status * K_type
+    
+    # Scale lên một chút vì log10 thường nhỏ (VD: log10(5000) ~ 3.7)
+    # Nếu muốn max 10 thì cần nhân thêm hệ số hoặc để nguyên nếu muốn điểm dự án khó đạt 10
+    # Với công thức hiện tại: 5000 tỷ, Ongoing, Cầu lớn => 3.7 * 0.8 * 1.2 = 3.55 (Hợp lý cho điểm cộng thêm)
+    
+    return min(10.0, score)
+
+# --- 2. LOGIC CHÍNH ---
 
 def analyze_and_map_news():
     print(f"--- [Analyzer] Bắt đầu phân tích tin tức (Batch Size: {BATCH_SIZE}) ---")
     score_db = ScoringSession()
     
-    # 1. Lấy danh sách bài báo chưa phân tích KÈM thông tin Quận
-    # Lấy nhiều hơn (ví dụ 100 bài) để tối ưu batch
+    # Lấy danh sách bài báo chưa phân tích
     sql_get = text("""
         SELECT n.id, n.title, n.content, d.district_name 
         FROM news_articles n
         JOIN district_special_stats d ON n.district_id = d.id
         WHERE n.topic IS NULL 
-        ORDER BY n.id DESC LIMIT 100
+        ORDER BY n.id DESC LIMIT 300
     """)
     articles = score_db.execute(sql_get).fetchall()
     
@@ -29,7 +98,7 @@ def analyze_and_map_news():
         score_db.close()
         return
 
-    # 2. Chia nhỏ thành các batch
+    # Chia batch
     article_batches = [articles[i:i + BATCH_SIZE] for i in range(0, len(articles), BATCH_SIZE)]
     
     for batch in article_batches:
@@ -38,82 +107,148 @@ def analyze_and_map_news():
         except Exception as e:
             print(f"    !!! Critical Error processing batch: {e}")
 
-    # 3. Trigger Update điểm vùng
+    # Trigger Update
     aggregate_and_propagate_scores(score_db)
     score_db.close()
 
 def process_batch(batch, db):
-    """Xử lý một nhóm bài báo trong 1 request gửi tới Gemini"""
+    """Gửi batch tới Gemini để trích xuất số liệu, sau đó tính điểm bằng Python"""
     
-    # Chuẩn bị nội dung cho Prompt
     articles_text = ""
     for art in batch:
-        # Cắt ngắn nội dung mỗi bài để tiết kiệm token đầu vào (khoảng 800 ký tự là đủ để AI hiểu)
-        content_snippet = art.content[:800].replace("\n", " ") 
+        content_snippet = art.content[:1000].replace("\n", " ") 
         articles_text += f"""
-        --- ARTICLE ID: {art.id} ---
-        Quận mục tiêu: "{art.district_name}"
+        --- ID: {art.id} ---
+        Quận: "{art.district_name}"
         Tiêu đề: "{art.title}"
         Nội dung: "{content_snippet}..."
-        -----------------------------
+        --------------------
         """
 
-    # Config AI
-    # Batch Prompt
+    # Batch Prompt - Yêu cầu trích xuất số liệu
     prompt = f"""
-    Bạn là chuyên gia phân tích dữ liệu đô thị. Dưới đây là danh sách các bài báo cần xử lý.
-    
+    Bạn là một chuyên gia Kỹ thuật Dữ liệu Đô thị (Urban Data Engineer). Nhiệm vụ của bạn là trích xuất và chuẩn hóa thông tin từ các bản tin bất động sản/đô thị thành dữ liệu có cấu trúc.
+
+    DỮ LIỆU ĐẦU VÀO:
     {articles_text}
 
-    --- YÊU CẦU ---
-    Với MỖI bài báo (dựa theo ARTICLE ID), hãy thực hiện:
-    1. Kiểm tra (Validate): Nội dung bài báo có thực sự nói về sự kiện xảy ra tại "Quận mục tiêu" không?
-    2. Phân tích: Nếu đúng quận, hãy xác định chủ đề và mức độ ảnh hưởng.
+    --- QUY TẮC CHUYỂN ĐỔI (QUAN TRỌNG) ---
+    Khi gặp thông tin định tính, hãy quy đổi sang số theo bảng sau:
 
-    Hãy trả về kết quả dưới dạng một JSON LIST (Array of Objects). Tuyệt đối không thêm text thừa.
+    1. NGẬP LỤT (FLOOD) - depth_cm & duration_h:
+       - "Ngập mắt cá chân/xâm xấp": 15 cm
+       - "Ngập nửa bánh xe": 25 cm
+       - "Ngập lút bánh xe/chết máy": 40 cm
+       - "Ngập yên xe/tràn vào nhà": 60 cm
+       - "Ùn ứ/Di chuyển chậm": duration = 1.0h
+       - "Kẹt xe nghiêm trọng/Tê liệt": duration = 3.0h
+       - Nếu không rõ thời gian, mặc định duration = 2.0h
+
+    2. DỰ ÁN (PROJECT) - status:
+       - "Đề xuất", "Chủ trương", "Ý tưởng": -> "PROPOSAL"
+       - "Đã duyệt", "Quy hoạch 1/500", "Bàn giao mặt bằng": -> "APPROVED"
+       - "Khởi công", "Đang xây dựng", "Tiến độ": -> "ONGOING"
+       - "Hợp long", "Thông xe", "Sắp khánh thành": -> "NEAR_FINISH"
+       - Loại hình (type): Metro/Đường sắt (METRO), Cầu/Đường lớn/Cao tốc (BRIDGE_ROAD), Mở rộng hẻm/Nâng cấp đường (EXPANSION).
+
+    3. TAI NẠN (ACCIDENT):
+       - Nếu bài viết chỉ nói "thương vong" chung chung: Giả định 1 injuries.
+       - "Nghiêm trọng" nhưng không nêu số người: Giả định 1 injuries, 2 vehicles.
+
+    --- YÊU CẦU XỬ LÝ VỚI TỪNG BÀI BÁO ---
+    1. VALIDATE: Kiểm tra xem sự kiện có thực sự ảnh hưởng đến "Quận" được ghi trong input không. (Ví dụ: Bài báo nói về Q.7 nhưng input là Q.1 -> is_relevant = false).
+    2. CLASSIFY: Chỉ chọn 1 Topic chính xác nhất. Ưu tiên theo thứ tự: FLOOD > ACCIDENT > PROJECT > OTHER.
+    3. EXTRACT: Trích xuất số liệu. Nếu thiếu số liệu, hãy dùng logic suy luận hợp lý nhất từ ngữ cảnh hoặc dùng giá trị mặc định an toàn.
+
+    --- OUTPUT FORMAT ---
+    Trả về duy nhất một JSON List (Array of Objects). Không thêm markdown code block (```json). Không thêm giải thích.
+
     Cấu trúc mỗi object:
     {{
-        "id": (Số nguyên, giữ nguyên ID của bài báo),
-        "is_relevant": true/false (Sai quận hoặc tin rác thì false),
-        "reason": "Lý do nếu false",
+        "id": int,                 // Giữ nguyên ID đầu vào
+        "is_relevant": bool,       // True nếu bài báo đúng quận
+        "reason": string,          // Lý do ngắn gọn nếu false hoặc lý do chọn topic
         "topic": "FLOOD" | "ACCIDENT" | "PROJECT" | "OTHER",
-        "sentiment": "NEGATIVE" | "POSITIVE",
-        "impact_score": (Số nguyên 1-10),
-        "summary": "Tóm tắt tiếng Việt cực ngắn (dưới 20 từ)"
+        "summary": string,         // Tóm tắt sự kiện dưới 20 từ
+        
+        // Chỉ null nếu topic khác FLOOD
+        "flood_data": {{
+            "depth_cm": int,       // Mặc định 0
+            "duration_h": float,   // Mặc định 1.0
+            "scope": int           // 1: Hẻm/Cục bộ, 2: Đường chính/Liên phường, 3: Diện rộng/Toàn quận
+        }},
+        
+        // Chỉ null nếu topic khác ACCIDENT
+        "accident_data": {{
+            "fatalities": int,     // Số người chết, mặc định 0
+            "injuries": int,       // Số người bị thương, mặc định 0
+            "vehicles": int        // Số xe hư hỏng, mặc định 1
+        }},
+        
+        // Chỉ null nếu topic khác PROJECT
+        "project_data": {{
+            "capital_billion": float, // Vốn đầu tư (tỷ VNĐ). Nếu USD hãy đổi sang VND (tỷ giá 25000). Mặc định 10.0
+            "status": "PROPOSAL" | "APPROVED" | "ONGOING" | "NEAR_FINISH",
+            "type": "METRO" | "BRIDGE_ROAD" | "EXPANSION" | "OTHER"
+        }}
     }}
     """
 
-    print("    -> Gửi yêu cầu phân tích batch tới Gemini...")
-    print(prompt)
-
+    print("    -> Gửi yêu cầu trích xuất tới Gemini...")
+    
     try:
         # Gọi Gemini
         response = generate_content_smart(prompt)
+        # Clean response text (đôi khi Gemini trả về markdown ```json ... ```)
         text_resp = response.text.replace("```json", "").replace("```", "").strip()
-
-        print("    -> Nhận được phản hồi từ Gemini, xử lý kết quả...")
-        print(text_resp)
         
-        # Parse JSON Array
         results = json.loads(text_resp)
-
-
         
-        # Duyệt qua kết quả và update DB
+        # Duyệt kết quả và tính điểm
         for item in results:
             art_id = item.get('id')
+            topic = item.get('topic')
             is_relevant = item.get('is_relevant', False)
             
-            # Tìm bài báo gốc trong batch để log tên quận (Optional)
+            # Tìm bài báo gốc để log
             original_art = next((a for a in batch if a.id == art_id), None)
             dist_name = original_art.district_name if original_art else "Unknown"
 
-            if not is_relevant:
-                # Xóa bài báo không hợp lệ
-                print(f"    -> [BATCH DELETE] Art {art_id} ({dist_name}): {item.get('reason')}")
-                db.execute(text("DELETE FROM news_articles WHERE id = :id"), {"id": art_id})
+            if not is_relevant or topic == 'OTHER':
+                # Xóa hoặc mark ignore
+                if not is_relevant:
+                    print(f"    -> [DELETE] Art {art_id} ({dist_name}): {item.get('reason')}")
+                    db.execute(text("DELETE FROM news_articles WHERE id = :id"), {"id": art_id})
+                else:
+                    # Topic OTHER -> Set topic nhưng score = 0
+                    db.execute(text("UPDATE news_articles SET topic='OTHER', impact_score=0 WHERE id=:id"), {"id": art_id})
             else:
-                # Cập nhật kết quả phân tích
+                # --- TÍNH ĐIỂM DỰA TRÊN SỐ LIỆU ---
+                final_score = 0.0
+                
+                if topic == 'FLOOD':
+                    data = item.get('flood_data', {})
+                    final_score = calculate_flood_score(
+                        data.get('depth_cm', 0),
+                        data.get('duration_h', 1.0),
+                        data.get('scope', 1)
+                    )
+                elif topic == 'ACCIDENT':
+                    data = item.get('accident_data', {})
+                    final_score = calculate_accident_score(
+                        data.get('fatalities', 0),
+                        data.get('injuries', 0),
+                        data.get('vehicles', 1)
+                    )
+                elif topic == 'PROJECT':
+                    data = item.get('project_data', {})
+                    final_score = calculate_project_score(
+                        data.get('capital_billion', 10.0),
+                        data.get('status', 'PROPOSAL'),
+                        data.get('type', 'OTHER')
+                    )
+
+                # Update Database
                 update_sql = text("""
                     UPDATE news_articles 
                     SET topic = :topic, 
@@ -123,41 +258,90 @@ def process_batch(batch, db):
                         fetched_at = NOW()
                     WHERE id = :aid
                 """)
+                
+                # Sentiment logic đơn giản dựa trên topic
+                sentiment = 'POSITIVE' if topic == 'PROJECT' else 'NEGATIVE'
+                
                 db.execute(update_sql, {
-                    "topic": item.get('topic', 'OTHER'), 
-                    "score": item.get('impact_score', 0), 
-                    "sentiment": item.get('sentiment', 'NEUTRAL'), 
+                    "topic": topic, 
+                    "score": round(final_score, 2), 
+                    "sentiment": sentiment, 
                     "summary": item.get('summary', ''), 
                     "aid": art_id
                 })
-                print(f"    -> [BATCH UPDATE] Art {art_id} ({dist_name}): {item.get('topic')} - Score {item.get('impact_score')}")
+                
+                print(f"    -> [UPDATE] Art {art_id} ({dist_name}): {topic} | Score: {final_score:.2f}")
         
         db.commit()
 
     except json.JSONDecodeError:
-        print("    ! Error: AI response is not valid JSON. Skipping batch.")
-        # print(text_resp) # Debug
+        print("    ! Error: AI response is not valid JSON.")
+        print(text_resp[:500]) # Debug log
     except Exception as e:
-        print(f"    ! Error calling Gemini for batch: {e}")
+        print(f"    ! Error processing batch: {e}")
 
-# Hàm aggregate_and_propagate_scores GIỮ NGUYÊN (không thay đổi logic)
+# Hàm này giữ nguyên logic tổng hợp từ các điểm số đã tính
 def aggregate_and_propagate_scores(score_db):
     print("--- [Aggregator] Tổng hợp điểm và Update Cross-DB ---")
     
+
     # 1. Tổng hợp điểm vào District Stats
+    # Áp dụng Time Decay (Suy giảm theo thời gian) và Logarithmic Scaling (Bão hòa)
     agg_sql = text("""
         UPDATE district_special_stats d
         SET 
-            flood_impact_score = LEAST((SELECT COALESCE(SUM(impact_score), 0) FROM news_articles WHERE district_id = d.id AND topic = 'FLOOD' AND published_date > NOW() - INTERVAL '30 days') * 0.5, 20),
-            accident_impact_score = LEAST((SELECT COALESCE(SUM(impact_score), 0) FROM news_articles WHERE district_id = d.id AND topic = 'ACCIDENT' AND published_date > NOW() - INTERVAL '30 days') * 0.3, 15),
-            future_project_score = LEAST((SELECT COALESCE(SUM(impact_score), 0) FROM news_articles WHERE district_id = d.id AND topic = 'PROJECT' AND sentiment = 'POSITIVE') * 0.05, 10),
+            -- 1. NGẬP LỤT (FLOOD)
+            -- Logic: Cộng dồn điểm các bài báo trong 60 ngày, nhưng mỗi bài báo bị giảm giá trị theo thời gian (Exponential Decay).
+            -- Sau đó lấy Logarit của tổng để tránh điểm số tăng vọt tuyến tính.
+            -- Công thức: 8 * LN(1 + SUM(score * EXP(-0.05 * days_diff)))
+            flood_impact_score = LEAST(20, 
+                8 * LN(1 + (
+                    SELECT COALESCE(SUM(
+                        impact_score * EXP(-0.05 * EXTRACT(DAY FROM (NOW() - published_date)))
+                    ), 0) 
+                    FROM news_articles 
+                    WHERE district_id = d.id 
+                    AND topic = 'FLOOD' 
+                    AND published_date > NOW() - INTERVAL '60 days'
+                ))
+            ),
+            
+            -- 2. TAI NẠN (ACCIDENT)
+            -- Logic tương tự Flood nhưng hệ số K nhỏ hơn (6) và trần thấp hơn (15)
+            accident_impact_score = LEAST(15, 
+                6 * LN(1 + (
+                    SELECT COALESCE(SUM(
+                        impact_score * EXP(-0.05 * EXTRACT(DAY FROM (NOW() - published_date)))
+                    ), 0) 
+                    FROM news_articles 
+                    WHERE district_id = d.id 
+                    AND topic = 'ACCIDENT' 
+                    AND published_date > NOW() - INTERVAL '60 days'
+                ))
+            ),
+            
+            -- 3. DỰ ÁN (PROJECT)
+            -- Không dùng Time Decay (vì dự án cũ vẫn có giá trị). 
+            -- Chỉ dùng Logarit để nén dải điểm (tránh việc cộng dồn quá nhiều dự án nhỏ làm điểm quá cao).
+            -- Window xét duyệt dài hơn (365 ngày) vì tin dự án có giá trị lâu dài.
+            future_project_score = LEAST(30, 
+                10 * LN(1 + (
+                    SELECT COALESCE(SUM(impact_score), 0) 
+                    FROM news_articles 
+                    WHERE district_id = d.id 
+                    AND topic = 'PROJECT' 
+                    AND published_date > NOW() - INTERVAL '365 days'
+                ))
+            ),
+            
             last_analyzed_at = NOW()
     """)
     score_db.execute(agg_sql)
     score_db.commit()
     
-    # 2. Lan truyền Cross-DB (Logic cũ import PropertySession ở đây)    
-    # Lấy danh sách quận có boundary
+    # 2. Lan truyền Cross-DB (Logic cũ)
+
+    
     districts = score_db.execute(text("""
         SELECT id, district_name, ST_AsText(boundary) as wkt, 
                flood_impact_score, accident_impact_score, future_project_score

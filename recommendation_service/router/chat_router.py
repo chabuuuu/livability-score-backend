@@ -138,7 +138,7 @@ async def chat_general_stream(
                         f"  + Vị trí: {p.address} (Cách {p.distance_km}km)\n"
                     )
                 recommendation_context += "------------------------------------------\n"
-                recommendation_context += "Nếu khách hỏi mua nhà, hãy ưu tiên giới thiệu các căn trên.\n"
+                recommendation_context += "Nếu khách hỏi mua nhà, hãy ưu tiên giới thiệu các căn trên. Đồng thời dẫn link đến trang chi tiết của từng căn. Link chi tiết có dạng: https://timnha.sonata.io.vn/bat-dong-san/{property_id}\n"
         except Exception as e:
             print(f"Error fetching recommendations for chat context: {e}")
             # Không làm gián đoạn chat nếu lỗi lấy gợi ý

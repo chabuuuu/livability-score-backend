@@ -121,39 +121,61 @@ def fetch_user_weights(user_id: int) -> Dict[str, float]:
 
 # --- LOGIC TÍNH TOÁN ---
 def calculate_overall_score(score_obj: PropertyLivabilityScore, weights: dict, include_special: bool = True) -> float:
-    total_score = 0.0
+    # 1. Chuẩn hóa trọng số (Normalized Weights) - BẮT BUỘC
+    total_weight = sum(weights.values())
+    if total_weight == 0: return 0.0
+    w = {k: v / total_weight for k, v in weights.items()} # w['score_healthcare'], ...
+
     def get_val(val): return float(val) if val is not None else 0.0
 
-    # 1. Lấy điểm tác động đặc biệt (Nếu user yêu cầu)
-    flood_penalty = 0.0
-    accident_penalty = 0.0
+    # 2. Lấy dữ liệu thô
+    s_health = get_val(score_obj.score_healthcare)
+    s_edu = get_val(score_obj.score_education)
+    s_shop = get_val(score_obj.score_shopping)
+    s_trans = get_val(score_obj.score_transportation)
+    s_env = get_val(score_obj.score_environment)
+    s_enter = get_val(score_obj.score_entertainment)
+    s_safety = get_val(score_obj.score_safety)
+
+    # 3. Xử lý Chỉ số đặc biệt (Special Indicators)
     potential_bonus = 0.0
-
-    if include_special:
-        flood_penalty = get_val(score_obj.flood_impact_score)
-        accident_penalty = get_val(score_obj.accident_impact_score)
-        potential_bonus = get_val(score_obj.future_project_score)
-
-    # 2. Điều chỉnh điểm thành phần
-    # Giao thông bị ảnh hưởng bởi ngập lụt
-    adj_transportation = max(0, get_val(score_obj.score_transportation) - flood_penalty)
     
-    # An ninh bị ảnh hưởng bởi tai nạn giao thông
-    adj_safety = max(0, get_val(score_obj.score_safety) - accident_penalty)
+    if include_special:
+        # Lấy điểm phạt từ DB (đã được tính bằng Logarit + Decay)
+        p_flood = get_val(score_obj.flood_impact_score)      # Max 20
+        p_accident = get_val(score_obj.accident_impact_score) # Max 15
+        raw_potential = get_val(score_obj.future_project_score) # Max 30
+        
+        # Ngập lụt: Tác động kép (Giao thông & Môi trường)
+        # Nếu ngập 20đ -> Trừ 20đ Giao thông VÀ Trừ 10đ Môi trường (Do nước bẩn)
+        s_trans = max(0, s_trans - p_flood) 
+        s_env   = max(0, s_env - (p_flood * 0.5)) 
 
-    # 3. Tính tổng có trọng số
-    total_score += get_val(score_obj.score_healthcare) * weights.get('score_healthcare', 0)
-    total_score += get_val(score_obj.score_education) * weights.get('score_education', 0)
-    total_score += get_val(score_obj.score_shopping) * weights.get('score_shopping', 0)
-    total_score += adj_transportation * weights.get('score_transportation', 0) 
-    total_score += get_val(score_obj.score_environment) * weights.get('score_environment', 0)
-    total_score += get_val(score_obj.score_entertainment) * weights.get('score_entertainment', 0)
-    total_score += adj_safety * weights.get('score_safety', 0)
+        # Tai nạn: Tác động kép (An ninh & Giao thông)
+        # Nếu tai nạn 15đ -> Trừ 15đ An ninh VÀ Trừ 5đ Giao thông (Do kẹt xe vụ tai nạn)
+        s_safety = max(0, s_safety - p_accident)
+        s_trans  = max(0, s_trans - (p_accident * 0.33))
 
-    # 4. Cộng điểm tiềm năng
-    total_score += potential_bonus
+        # Max bonus thực tế sẽ là 30 * 0.3 = 9 điểm.
+        potential_bonus = raw_potential * 0.3
 
-    return round(min(100, total_score), 2)
+    # 4. Tính tổng có trọng số (Weighted Sum Model)
+    base_score = (
+        s_health * w.get('score_healthcare', 0) +
+        s_edu * w.get('score_education', 0) +
+        s_shop * w.get('score_shopping', 0) +
+        s_trans * w.get('score_transportation', 0) + 
+        s_env * w.get('score_environment', 0) +
+        s_enter * w.get('score_entertainment', 0) +
+        s_safety * w.get('score_safety', 0)
+    )
+
+    # 5. Cộng điểm tiềm năng (Value Added)
+    # Tiềm năng là giá trị gia tăng, cộng trực tiếp vào sau cùng
+    final_score = base_score + potential_bonus
+
+    # 6. Capping (Giới hạn [0-100])
+    return round(min(100.0, max(0.0, final_score)), 2)
 
 # --- API ENDPOINT ---
 @router.post("/scores/batch", response_model=APIResponse[LivabilityScoreDTO])

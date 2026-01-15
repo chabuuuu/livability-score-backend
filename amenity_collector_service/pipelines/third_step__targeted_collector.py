@@ -1,7 +1,7 @@
 import pandas as pd
 import geopandas as gpd
 from sqlalchemy import text
-from pipelines.second_step__google_collector import (
+from pipelines.first_step__google_collector import (
     scan_target_cells, 
     get_district_boundaries, 
     create_grid,

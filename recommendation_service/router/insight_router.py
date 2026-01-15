@@ -267,18 +267,38 @@ async def analyze_livability_stream(
         Hãy phân tích và giải thích "Chỉ số đáng sống" (Livability Score) cho một bất động sản dựa trên dữ liệu dưới đây.
 
         --- DỮ LIỆU ĐIỂM SỐ (Thang 0-100) ---
-        - Y tế: {score_record.score_healthcare} (Khoảng cách gần nhất: {score_record.dist_healthcare}m)
-        - Giáo dục: {score_record.score_education} (Khoảng cách gần nhất: {score_record.dist_education}m)
-        - Mua sắm: {score_record.score_shopping} (Số lượng quán quanh 500m: {score_record.count_shopping})
-        - Giao thông: {score_record.score_transportation} (Khoảng cách bến xe/trạm: {score_record.dist_transportation}m)
-        - Môi trường/Công viên: {score_record.score_environment} (Khoảng cách: {score_record.dist_environment}m)
-        - Giải trí: {score_record.score_entertainment} (Số lượng quán quanh 1km: {score_record.count_entertainment})
-        - An ninh: {score_record.score_safety} (Khoảng cách đồn CA: {score_record.dist_safety}m)
+        - Y tế: {score_record.score_healthcare} (Khoảng cách gần nhất: {score_record.dist_healthcare}m) (Số lượng: {score_record.count_healthcare})
+        - Giáo dục: {score_record.score_education} (Khoảng cách gần nhất: {score_record.dist_education}m) (Số lượng: {score_record.count_education}))
+        - Mua sắm: {score_record.score_shopping} (Số lượng quán quanh 500m: {score_record.count_shopping}) (Khoảng cách gần nhất: {score_record.dist_shopping}m)
+        - Giao thông: {score_record.score_transportation} (Khoảng cách bến xe/trạm: {score_record.dist_transportation}m) (Số lượng: {score_record.count_transportation})
+        - Môi trường/Công viên: {score_record.score_environment} (Khoảng cách: {score_record.dist_environment}m) (Số lượng: {score_record.count_environment})
+        - Giải trí: {score_record.score_entertainment} (Số lượng quán quanh 1km: {score_record.count_entertainment}) (Khoảng cách gần nhất: {score_record.dist_entertainment}m)
+        - An ninh: {score_record.score_safety} (Khoảng cách đồn CA: {score_record.dist_safety}m) (Số lượng: {score_record.count_safety})
+
 
         --- CHỈ SỐ ĐẶC BIỆT (Tác động từ tin tức thực tế) ---
-        - Ngập lụt (Điểm trừ): {score_record.flood_impact_score or 0} (Nếu cao nghĩa là khu vực này thường xuyên có tin ngập)
-        - Tai nạn/An ninh (Điểm trừ): {score_record.accident_impact_score or 0} (Nếu cao nghĩa là có tin về tai nạn hoặc an ninh kém)
-        - Tiềm năng phát triển (Điểm cộng): {score_record.future_project_score or 0} (Nếu cao nghĩa là có tin về dự án hạ tầng sắp triển khai)
+        Các chỉ số này được tổng hợp từ tin tức thực tế (News & Social Listening). Hãy chú ý thang điểm riêng biệt sau:
+
+        A. RỦI RO NGẬP LỤT (Thang 0 - 20):
+        - Điểm hiện tại: {score_record.flood_impact_score or 0}/20
+        - Hướng dẫn đọc: 
+            + 0-5: Khu vực khô ráo, an toàn.
+            + 5-12: Có điểm ngập cục bộ khi mưa lớn.
+            + >12: CẢNH BÁO ĐỎ - Khu vực trũng thấp, ngập thường xuyên/nghiêm trọng. -> Cần trừ điểm nặng vào nhận xét về Giao thông & Môi trường.
+
+        B. RỦI RO TAI NẠN/AN NINH (Thang 0 - 15):
+        - Điểm hiện tại: {score_record.accident_impact_score or 0}/15
+        - Hướng dẫn đọc:
+            + 0-3: Khu vực bình yên.
+            + 3-8: Cần lưu ý khi đi đêm.
+            + >8: CẢNH BÁO - "Điểm đen" tai nạn hoặc an ninh phức tạp. -> Cần cảnh báo người mua.
+
+        C. TIỀM NĂNG HẠ TẦNG (Thang 0 - 30):
+        - Điểm hiện tại: {score_record.future_project_score or 0}/30
+        - Hướng dẫn đọc:
+            + 0-5: Hạ tầng ổn định, ít thay đổi.
+            + 5-15: Có dự án nâng cấp nhỏ.
+            + >15: CƠ HỘI ĐẦU TƯ LỚN - Có đại dự án (Metro, Cầu, Đường lớn) đang/sắp triển khai. -> Điểm cộng lớn cho tiềm năng tăng giá.
 
         --- ĐỊA ĐIỂM THỰC TẾ XUNG QUANH (Context) ---
         Biết rằng xung quanh bất động sản này có các địa điểm nổi bật sau:
@@ -292,17 +312,21 @@ async def analyze_livability_stream(
         {nearby_context.get('environment')}
         5. Giao thông:
         {nearby_context.get('transportation')}
+        6. Giải trí:
+        {nearby_context.get('entertainment')}
+        7. An ninh:
+        {nearby_context.get('public_safety')}
 
-        --- YÊU CẦU ---
-        Hãy viết một đoạn nhận xét ngắn gọn (khoảng 150-200 từ) bằng tiếng Việt, giọng văn chuyên nghiệp nhưng gần gũi:
-        1. Đánh giá tổng quan: Khu vực này mạnh về điểm gì, yếu về điểm gì?
-        2. Phân tích Tác động Đặc biệt: 
-           - Nếu có điểm trừ ngập lụt/tai nạn: Hãy cảnh báo khéo léo người mua cần lưu ý.
-           - Nếu có điểm cộng tiềm năng: Hãy nhấn mạnh đây là cơ hội đầu tư tốt nhờ hạ tầng tương lai.
-        3. Chi tiết đắt giá: Hãy nhắc tên cụ thể các địa điểm (ví dụ: "Lợi thế lớn nhất là nằm ngay sát Bệnh viện X và gần Trường Y...").
-        4. Kết luận: Khu vực này phù hợp với ai (Gia đình trẻ, người độc thân, người già...)?
-        
-        Lưu ý: Bạn hãy vận dụng kiến thức thực tế sẵn có của mình hoặc tìm kiếm trên internet về các địa điểm trên (về quy mô, uy tín, chất lượng chuyên môn...) để đưa ra nhận xét sâu sắc và chính xác, không bịa đặt thông tin.
+        --- YÊU CẦU BÀI VIẾT ---
+        Viết một đoạn nhận xét (150-200 từ) giọng văn chuyên gia, khách quan nhưng gần gũi:
+
+        1. **Phân tích Sâu (Deep Dive):** Đừng chỉ liệt kê điểm số. Hãy kết nối dữ liệu.
+        - Ví dụ: Nếu điểm Giao thông cao (90) nhưng điểm Ngập lụt cao (>12) -> Phải nhận xét là "Giao thông thuận tiện nhưng cần đề phòng ngập nước vào mùa mưa, có thể gây khó khăn khi di chuyển".
+        2. **Điểm nhấn Thực tế:** Nhắc tên cụ thể 2-3 địa điểm nổi bật nhất trong danh sách Context (ví dụ: "Lợi thế lớn là nằm sát Bệnh viện...").
+        3. **Đánh giá Tiềm năng/Rủi ro:** Dựa vào mục (2) Chỉ số đặc biệt để đưa ra lời khuyên "xương máu" (Cảnh báo ngập/tai nạn hoặc Chúc mừng tiềm năng tăng giá).
+        4. **Phân khúc phù hợp:** Kết luận BĐS này hợp với ai (Gia đình có con nhỏ, Người đầu tư, Người làm văn phòng...).
+
+        *Lưu ý: Không bịa đặt thông tin không có trong dữ liệu. Nếu điểm số thấp, hãy nhận xét thẳng thắn nhưng khéo léo.*
         """
 
         print("DEBUG: Prompt prepared, calling AI...")

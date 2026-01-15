@@ -32,6 +32,12 @@ class PredictionResponse(BaseModel):
     component_scores: Dict[str, float]
     ai_insight: str # Lời giải thích của AI
 
+class PredictionByPropertIdResponse(BaseModel):
+    predicted_price: float
+    predicted_price_billions: float
+    livability_score: float
+    component_scores: Dict[str, float]
+
 class ChatPredictionRequest(BaseModel):
     prediction_id: str # UUID nhận được từ API /price
     message: str

@@ -1,39 +1,49 @@
-# Smart Real Estate Platform: Backend & Livability Engine
+# Geospatial Real Estate Analytics & Recommendation Platform: The Livability Engine
 
-## Executive Summary
+This repository contains the **Polyglot Microservices Backend** for a next-generation real estate research platform. Moving beyond traditional search engines that rely solely on static attributes (price, area), this system introduces a **Livability Score Engine** to quantify the quality of life at any given coordinate using geospatial intelligence and real-time social indicators.
 
-This repository hosts the backend microservices ecosystem for the **Smart Real Estate Platform**, a graduation thesis project designed to revolutionize property searching.
-
-Unlike traditional platforms that focus solely on price and area, this system introduces a proprietary **"Livability Score Engine."** This engine aggregates multi-dimensional geospatial data to objectively quantify the quality of life for any given location, aiding users in making informed decisions based on safety, convenience, education, and future potential.
+## The Core Vision
+The primary research goal is to bridge the information gap between real estate pricing and environmental context. By integrating **GIS (Geographic Information Systems)**, **Machine Learning**, and **LLMs**, the platform transforms raw urban data into actionable insights, allowing users to find homes that truly match their lifestyle preferences.
 
 ---
 
-## Scientific Methodology & Data Integrity
+## 🚀 Research & Technical Innovations
 
-To ensure the system's reliability and academic rigor, we address core challenges regarding data sourcing, weighting logic, and user-generated content quality.
+### 1. The Multi-Criteria Livability Framework
+Our research defines "Livability" through two distinct dimensions:
+*   **Static Indicators (Environmental Baseline):** Calculated using PostGIS spatial queries (`ST_DWithin`) across seven categories: Healthcare, Education, Shopping, Transportation, Environment (Green Space), Entertainment, and Safety. 
+    *   *Methodology:* Employs **Distance Decay** functions for proximity-based services and **Saturation functions** for density-based amenities.
+*   **Dynamic Social Indicators (Real-time Risk/Potential):** A novel approach that scrapes real-time news (floods, accidents, urban planning) and uses **LLM** to perform sentiment analysis and spatial impact scoring.
 
-### 1\. The Factor Framework (Urban Planning Standards)
+### 2. Explainable AI (XAI) in Valuation
+The system doesn't just predict prices; it explains them. Using a **Hedonic Pricing Model** implemented via **LightGBM**, we integrate Livability Scores as key features. 
+*   **SHAP (SHapley Additive exPlanations):** We utilize SHAP to quantify the impact of environmental factors on property value, proving scientifically that "Environment" and "Transport" scores significantly drive market prices.
 
-The components of the Livability Score are not arbitrary. They are derived from established urban planning frameworks such as the **"15-Minute City" concept** and the **OECD Better Life Index**.
+### 3. Adaptive Data Strategy (Grid-based Gap Analysis)
+To optimize data costs and coverage, the system employs a unique ETL strategy:
+*   **OSM-Google Hybrid:** The system partitions the map into a grid. It primarily harvests data from **OpenStreetMap** and triggers targeted **Google Places API** scans only in "data-deficient" cells identified by our Gap Analysis algorithm.
 
-- **Core Pillars:** Safety, Healthcare, Education, Mobility (Transportation), Environment, and Convenience.
+### 4. Real-time Geospatial Intelligence
+Leveraging **Golang** and **Redis Geo**, the platform implements high-concurrency background location tracking to push "Context-Aware" notifications when a user enters a high-livability zone matching their profile.
 
-### 2\. Weight Determination (The Hedonic Pricing Model)
+---
 
-We moved beyond subjective manual weighting. The system employs a **Data-Driven Approach** using Machine Learning:
+## 🏗 Polyglot Microservices Architecture
 
-- **Model:** We utilize **XGBoost** to perform regression analysis on property prices against surrounding amenities (Hedonic Pricing).
-- **Explainability:** Using **SHAP (SHapley Additive exPlanations)**, we extract the "Feature Importance" of each amenity category.
-- **Logic:** If the model detects that "Proximity to Parks" significantly increases property value in a specific district, the "Environment" factor automatically receives a higher weight for that zone.
+The backend is engineered for scalability and specialized performance, utilizing the best language for each task:
 
-### 3\. Data Quality Assurance (Anti-Fraud & Price Validation)
+| Service | Technology | Primary Responsibility |
+| :--- | :--- | :--- |
+| **User Service** | Java Spring Boot | Secure identity management, RBAC, and preference profiles. |
+| **Property Service** | Java Spring Boot | High-reliability CRUD operations and PostGIS-backed spatial search. |
+| **Recommendation Service** | Python (FastAPI/Flask) | Price prediction (LightGBM), SHAP analysis, and LLM-powered Chatbot insights. |
+| **Location Service** | Golang (Gin) | Real-time background GPS tracking and Redis Geo-spatial matching. |
+| **Special Indicator Service** | Python (Scrapy/Gemini) | Autonomous news crawling and AI-driven social impact scoring. |
+| **Amenity Collector** | Python (Pandas/GeoPandas) | Automated ETL pipelines for urban infrastructure enrichment. |
+| **Media Service** | Node.js (TypeScript) | Efficient handling of high-volume image/video uploads to **MinIO**. |
 
-Since the platform allows user-generated listings, we implement a **Statistical Anomaly Detection** pipeline to prevent "virtual prices" (fake pricing) from corrupting the training dataset:
+### Explainable Chatbot
+The system integrates a **Context-Aware Chatbot** that doesn't just provide numbers. It pulls surrounding amenity data and news impacts to explain: *"This property has a high safety score because it is within 500m of a police station, but the transport score is lower due to recent flood reports in this sector"*.
 
-1.  **Ground Truth Establishment:** We maintain a `market_price_trends` table derived from thousands of verified crawled listings (Mogi.vn).
-2.  **Z-Score Analysis:** When a user submits a property, the system calculates the Z-Score of their requested price against the local average.
-3.  **Outlier Filtering:** Listings with prices deviating significantly (e.g., \> ±2 Standard Deviations) are flagged as "Unverified Outliers" and are **excluded** from the model retraining pipeline to maintain data purity.
-
-### 4\. Architecture
-
-![alt text](./docs/images/KLTN-ARCHITECTURE.jpg)
+---
+**Disclaimer:** This project is a research-focused implementation exploring the intersection of Urban Science and Artificial Intelligence. All pricing predictions and livability scores are based on the integrated mathematical models and available geospatial data.

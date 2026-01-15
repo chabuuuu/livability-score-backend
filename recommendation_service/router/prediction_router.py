@@ -15,12 +15,15 @@ import pandas as pd
 import numpy as np
 import google.generativeai as genai
 from google.api_core import exceptions as google_exceptions
+from config.property_db_config import get_property_db
 from config.redis_config import redis_client
 
 from config.scoring_db_config import get_scoring_db
 from model.predict_history import PredictHistory
+from model.property import Property
+from router.livability_router import fetch_user_weights
 from service.livability_calculator import LivabilityCalculator
-from schema.prediction_schema import ChatMessageDTO, ChatPredictionRequest, PredictHistoryDTO, PropertyPredictionRequest, PredictionResponse
+from schema.prediction_schema import ChatMessageDTO, ChatPredictionRequest, PredictHistoryDTO, PredictionByPropertIdResponse, PropertyPredictionRequest, PredictionResponse
 from service.model_loader import PriceModel
 from schema.common import APIDetailResponse, APIResponse, ResponseData
 
@@ -135,7 +138,9 @@ async def predict_property_price(
         scores, _ = calculator.calculate_from_coordinates(payload.latitude, payload.longitude)
         
         total_livability = 0.0
-        for key, weight in WEIGHTS.items():
+        weights = fetch_user_weights(user_id) if user_id else WEIGHTS
+
+        for key, weight in weights.items():
             total_livability += scores.get(key, 0) * weight
         
         # 2. Dự đoán giá (AI Model)
@@ -462,4 +467,86 @@ async def get_prediction_detail(
             data=PredictHistoryDTO.model_validate(history)
         )
     except Exception as e:
+        return APIDetailResponse(status="500", result="Failed", error=str(e))
+    
+@router.post("/property/predict/{property_id}", response_model=APIDetailResponse[PredictionByPropertIdResponse])
+async def predict_by_property_id(
+    property_id: int,
+    user_id: int = Depends(get_current_user_id),
+    scoring_db: Session = Depends(get_scoring_db),
+    property_db: Session = Depends(get_property_db)
+):
+    """
+    Dự đoán giá cho một BĐS đã có trong hệ thống (dựa trên ID).
+    Tự động lấy thông tin từ DB để chạy mô hình.
+    """
+    try:
+        # 1. Lấy thông tin BĐS từ DB
+        prop = property_db.query(Property).filter(Property.id == property_id).first()
+        if not prop:
+            return APIDetailResponse(status="404", result="Failed", error="Property not found")
+
+        # Lấy tọa độ (Sử dụng ST_X, ST_Y để trích xuất từ cột Geometry)
+        coords = property_db.execute(
+            text("SELECT ST_X(location::geometry) as lng, ST_Y(location::geometry) as lat FROM properties WHERE id = :pid"),
+            {"pid": property_id}
+        ).fetchone()
+        
+        if not coords or coords.lat is None or coords.lng is None:
+             return APIDetailResponse(status="400", result="Failed", error="Property has no valid location")
+
+        lat, lng = coords.lat, coords.lng
+
+        # 2. Tính Livability Score
+        calculator = LivabilityCalculator(scoring_db=scoring_db)
+        scores, _ = calculator.calculate_from_coordinates(lat, lng)
+        
+        total_livability = 0.0
+
+        weights = fetch_user_weights(user_id) if user_id else WEIGHTS
+
+        for key, weight in weights.items():
+            total_livability += scores.get(key, 0) * weight
+
+        # 3. Chuẩn bị dữ liệu cho Model
+        input_data = {
+            'area': float(prop.area) if prop.area else np.nan,
+            'num_bedrooms': float(prop.num_bedrooms) if prop.num_bedrooms else np.nan,
+            'num_bathrooms': float(prop.num_bathrooms) if prop.num_bathrooms else np.nan,
+            'num_floors': float(prop.num_floors) if prop.num_floors else np.nan,
+            'facade_width_m': float(prop.facade_width_m) if prop.facade_width_m else 0.0,
+            'road_width_m': float(prop.road_width_m) if prop.road_width_m else 0.0,
+            'property_type': prop.property_type,
+            'legal_status': prop.legal_status,
+            'house_direction': prop.house_direction,
+            'balcony_direction': prop.balcony_direction,
+            'furniture_status': prop.furniture_status,
+            'address_district': prop.address_district,
+            # Merge scores
+            'livability_score': total_livability,
+            **scores
+        }
+
+        # Tạo DataFrame và fill thiếu
+        df = pd.DataFrame([input_data])
+        for col in ALL_TRAINING_FEATURES:
+            if col not in df.columns: df[col] = np.nan
+        df_ordered = df[ALL_TRAINING_FEATURES]
+
+        # 4. Dự đoán giá
+        predicted_price = PriceModel.predict(df_ordered)
+        price_billions = predicted_price / 1_000_000_000
+        
+        result = PredictionByPropertIdResponse(
+            predicted_price=round(predicted_price, 0),
+            predicted_price_billions=round(price_billions, 2),
+            livability_score=round(total_livability, 2),
+            component_scores=scores
+        )
+
+        return APIDetailResponse(status="200", result="Succeeded", data=result)
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
         return APIDetailResponse(status="500", result="Failed", error=str(e))

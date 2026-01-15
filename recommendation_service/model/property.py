@@ -38,6 +38,18 @@ class Property(Base):
     num_bedrooms = Column(Integer, default=0)
     num_bathrooms = Column(Integer, default=0)
     features = Column(JSON) # jsonb trong DB
+    num_floors = Column(Integer, default=0)
+    facade_width_m = Column(Numeric(5, 2), default=0)
+    road_width_m = Column(Numeric(5, 2), default=0)
+    house_direction = Column(String(50))
+    balcony_direction = Column(String(50))
+    furniture_status = Column(String(50))
+    legal_status = Column(String(50))
+    floor_number = Column(Integer, default=0)
+
+
+
+
     
     # URL hình ảnh (quan trọng để hiển thị thẻ)
     source_url = Column(Text) 

@@ -6,7 +6,9 @@ import com.kltn.livability_score.user_service.exception.preference_preset.Prefer
 import com.kltn.livability_score.user_service.mapper.PreferencePresetMapper;
 import com.kltn.livability_score.user_service.model.preference_preset.request.PreferencePresetRequest;
 import com.kltn.livability_score.user_service.model.preference_preset.response.PreferencePresetResponse;
+import com.kltn.livability_score.user_service.model.preference_preset.response.PresetSuggestionResponse;
 import com.kltn.livability_score.user_service.repository.PreferencePresetRepository;
+import com.kltn.livability_score.user_service.repository.PresetAdaptationLogRepository;
 import com.kltn.livability_score.user_service.services.PreferencePresetService;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -20,6 +22,7 @@ public class PreferencePresetServiceImpl implements PreferencePresetService {
 
   private final PreferencePresetRepository presetRepository;
   private final PreferencePresetMapper presetMapper;
+  private final PresetAdaptationLogRepository presetAdaptationLogRepository;
 
   @Override
   @SneakyThrows
@@ -65,6 +68,26 @@ public class PreferencePresetServiceImpl implements PreferencePresetService {
   public List<PreferencePresetResponse> getAllPresets() {
     List<PreferencePresetEntity> entities = presetRepository.findAll();
     return presetMapper.toResponseList(entities);
+  }
+
+  @Override
+  @Transactional(readOnly = true)
+  public PresetSuggestionResponse getSuggestionForPreset(Long presetId) {
+    // 1. Tìm preset để lấy tên
+    PreferencePresetEntity preset = findByIdOrThrow(presetId);
+
+    // 2. Query thống kê từ bảng Log
+    PresetSuggestionResponse suggestion = presetAdaptationLogRepository.getSuggestionStats(
+        preset.getId());
+
+    // 3. Nếu chưa có dữ liệu log nào, trả về object rỗng với tên preset
+    if (suggestion == null) {
+      suggestion = new PresetSuggestionResponse();
+      suggestion.setSourcePresetName(preset.getName());
+      suggestion.setTotalAdaptations(0L);
+    }
+
+    return suggestion;
   }
 
   // --- Private Helper ---

@@ -1,5 +1,7 @@
 package com.kltn.livability_score.user_service.services.impl;
 
+import com.kltn.livability_score.user_service.entity.PreferencePresetEntity;
+import com.kltn.livability_score.user_service.entity.PresetAdaptationLogEntity;
 import com.kltn.livability_score.user_service.entity.UserEntity;
 import com.kltn.livability_score.user_service.entity.UserProfileEntity;
 import com.kltn.livability_score.user_service.entity.caching.ForgotPasswordCacheEntity;
@@ -34,6 +36,7 @@ import com.kltn.livability_score.user_service.model.user.response.UserGetMeRespo
 import com.kltn.livability_score.user_service.model.user.response.UserLoginResponse;
 import com.kltn.livability_score.user_service.model.user.response.UserProfileResponse;
 import com.kltn.livability_score.user_service.repository.PreferencePresetRepository;
+import com.kltn.livability_score.user_service.repository.PresetAdaptationLogRepository;
 import com.kltn.livability_score.user_service.repository.UserProfileRepository;
 import com.kltn.livability_score.user_service.repository.UserRepository;
 import com.kltn.livability_score.user_service.repository.caching.ForgotPasswordCacheRepository;
@@ -70,6 +73,7 @@ public class UserServiceImpl implements UserService {
   private final ForgotPasswordCacheRepository forgotPasswordCacheRepository;
   private final VerifyPhoneCacheRepository verifyPhoneCacheRepository;
   private final SmsService smsService;
+  private final PresetAdaptationLogRepository presetAdaptationLogRepository;
 
   @Override
   @Transactional(readOnly = true)
@@ -321,13 +325,21 @@ public class UserServiceImpl implements UserService {
     // Find the existing profile
     UserProfileEntity profile = findProfileByIdOrThrow(currentUserId);
 
+    // Identify the preset user is using
+    PreferencePresetEntity currentPreset = presetRepository
+        .findByPreferenceEducationAndPreferenceSafetyAndPreferenceTransportationAndPreferenceShoppingAndPreferenceEntertainmentAndPreferenceEnvironmentAndPreferenceHealthcare(
+            profile.getPreferenceEducation(),
+            profile.getPreferenceSafety(),
+            profile.getPreferenceTransportation(),
+            profile.getPreferenceShopping(),
+            profile.getPreferenceEntertainment(),
+            profile.getPreferenceEnvironment(),
+            profile.getPreferenceHealthcare()
+        ).orElse(null);
+
     // Map non-null fields from request DTO to entity
     userProfileMapper.updateEntityFromRequest(request, profile);
 
-    // Chuyển đổi Float (từ entity) sang BigDecimal (từ request) nếu cần
-    // Lưu ý: Entity của bạn dùng Float, nhưng Request của tôi dùng BigDecimal.
-    // Tốt nhất là bạn nên đồng bộ cả 2 thành BigDecimal.
-    // Giả sử Entity đã được đổi thành BigDecimal:
     if (request.getPreferenceSafety() != null) {
       profile.setPreferenceSafety(request.getPreferenceSafety());
     }
@@ -350,9 +362,57 @@ public class UserServiceImpl implements UserService {
       profile.setPreferenceHealthcare(request.getPreferenceHealthcare());
     }
 
+    boolean isPreferenceChanged = isPreferenceFieldsChanged(request);
+
     UserProfileEntity updatedProfile = userProfileRepository.save(profile);
 
+    if (currentPreset != null && isPreferenceChanged) {
+      PreferencePresetEntity newPreset = presetRepository
+          .findByPreferenceEducationAndPreferenceSafetyAndPreferenceTransportationAndPreferenceShoppingAndPreferenceEntertainmentAndPreferenceEnvironmentAndPreferenceHealthcare(
+              request.getPreferenceEducation(),
+              request.getPreferenceSafety(),
+              request.getPreferenceTransportation(),
+              request.getPreferenceShopping(),
+              request.getPreferenceEntertainment(),
+              request.getPreferenceEnvironment(),
+              request.getPreferenceHealthcare()
+          ).orElse(null);
+
+      if (newPreset == null) {
+        saveAdaptationLog(currentUserId, profile, currentPreset);
+      }
+    }
+
     return userProfileMapper.toResponse(updatedProfile);
+  }
+
+  // Helper: Ghi log
+  private void saveAdaptationLog(Long userId, UserProfileEntity newProfile,
+      PreferencePresetEntity preferencePresetEntity) {
+    PresetAdaptationLogEntity log = PresetAdaptationLogEntity.builder()
+        .userId(userId)
+        .preferencePresetEntity(preferencePresetEntity)
+        .newSafety(newProfile.getPreferenceSafety())
+        .newEducation(newProfile.getPreferenceEducation())
+        .newShopping(newProfile.getPreferenceShopping())
+        .newTransportation(newProfile.getPreferenceTransportation())
+        .newEnvironment(newProfile.getPreferenceEnvironment())
+        .newEntertainment(newProfile.getPreferenceEntertainment())
+        .newHealthcare(newProfile.getPreferenceHealthcare())
+        .build();
+
+    presetAdaptationLogRepository.save(log);
+  }
+
+  // Helper: Check if request contains any preference fields
+  private boolean isPreferenceFieldsChanged(UserProfileUpdateRequest request) {
+    return request.getPreferenceSafety() != null ||
+        request.getPreferenceEducation() != null ||
+        request.getPreferenceShopping() != null ||
+        request.getPreferenceTransportation() != null ||
+        request.getPreferenceEnvironment() != null ||
+        request.getPreferenceEntertainment() != null ||
+        request.getPreferenceHealthcare() != null;
   }
 
   @Override

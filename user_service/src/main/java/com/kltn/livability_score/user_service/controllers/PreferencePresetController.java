@@ -5,6 +5,7 @@ import com.kltn.livability_score.user_service.annotations.ApiErrorResponse;
 import com.kltn.livability_score.user_service.exception.preference_preset.PreferencePresetException;
 import com.kltn.livability_score.user_service.model.base_format.response.ResponseVO;
 import com.kltn.livability_score.user_service.model.preference_preset.response.PreferencePresetResponse;
+import com.kltn.livability_score.user_service.model.preference_preset.response.PresetSuggestionResponse;
 import com.kltn.livability_score.user_service.services.PreferencePresetService;
 import com.kltn.livability_score.user_service.utils.ResponseEntityGenerator;
 import io.swagger.v3.oas.annotations.Operation;
@@ -39,5 +40,12 @@ public class PreferencePresetController {
       @PathVariable Long id) {
     PreferencePresetResponse response = presetService.getPresetById(id);
     return ResponseEntityGenerator.okFormat(response);
+  }
+
+  @GetMapping("/suggestion/{id}")
+  @Operation(summary = "Get a single suggestion preference preset by ID")
+  public ResponseEntity<ResponseVO<PresetSuggestionResponse>> getPresetSuggestion(
+      @PathVariable Long id) {
+    return ResponseEntityGenerator.okFormat(presetService.getSuggestionForPreset(id));
   }
 }

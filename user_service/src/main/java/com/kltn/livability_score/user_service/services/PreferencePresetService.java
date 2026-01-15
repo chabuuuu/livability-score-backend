@@ -2,6 +2,7 @@ package com.kltn.livability_score.user_service.services;
 
 import com.kltn.livability_score.user_service.model.preference_preset.request.PreferencePresetRequest;
 import com.kltn.livability_score.user_service.model.preference_preset.response.PreferencePresetResponse;
+import com.kltn.livability_score.user_service.model.preference_preset.response.PresetSuggestionResponse;
 import java.util.List;
 
 public interface PreferencePresetService {
@@ -17,4 +18,7 @@ public interface PreferencePresetService {
   PreferencePresetResponse getPresetById(Long id);
 
   List<PreferencePresetResponse> getAllPresets();
+
+  PresetSuggestionResponse getSuggestionForPreset(Long presetId);
+
 }

@@ -1,20 +1,39 @@
-FROM node:21-alpine3.19
+# Stage 1: Build stage
+# Sử dụng golang alpine để build cho nhẹ
+FROM golang:1.21-alpine AS builder
 
-RUN mkdir -p /opt/app
+# Thiết lập thư mục làm việc
+WORKDIR /app
 
-WORKDIR /opt/app
+# Copy go.mod và go.sum trước để tận dụng Docker cache layers
+COPY go.mod go.sum ./
 
-RUN npm i npm@10 -g
+# Download các dependencies
+RUN go mod download
 
-COPY package.json package-lock.json ./
-
-RUN npm install
-
+# Copy toàn bộ source code vào image
 COPY . .
 
-# Build the application
-RUN npm run build
+# Build ứng dụng
+# CGO_ENABLED=0: Build static binary (không phụ thuộc thư viện C của OS)
+# -ldflags="-w -s": Loại bỏ debug info để giảm kích thước file binary
+# cmd/server/main.go: Đường dẫn tới file main của bạn
+RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -o media-service-app cmd/server/main.go
 
+# Stage 2: Run stage
+# Sử dụng alpine image nhỏ gọn để chạy ứng dụng
+FROM alpine:latest
+
+WORKDIR /app
+
+# Cài đặt CA certificates để gọi HTTPS (cần thiết nếu MinIO dùng SSL hoặc gọi API ngoài)
+RUN apk --no-cache add ca-certificates
+
+# Copy file binary từ stage builder sang
+COPY --from=builder /app/media-service-app .
+
+# Expose port 8080
 EXPOSE 8080
 
-CMD ["sh", "-c", "npm run start:prod"]
+# Chạy ứng dụng
+CMD ["./media-service-app"]

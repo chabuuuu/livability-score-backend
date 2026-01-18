@@ -19,6 +19,7 @@ from config.property_db_config import get_property_db
 from config.redis_config import redis_client
 
 from config.scoring_db_config import get_scoring_db
+from model.livability_score import PropertyLivabilityScore
 from model.predict_history import PredictHistory
 from model.property import Property
 from router.livability_router import fetch_user_weights
@@ -26,6 +27,7 @@ from service.livability_calculator import LivabilityCalculator
 from schema.prediction_schema import ChatMessageDTO, ChatPredictionRequest, PredictHistoryDTO, PredictionByPropertIdResponse, PropertyPredictionRequest, PredictionResponse
 from service.model_loader import PriceModel
 from schema.common import APIDetailResponse, APIResponse, ResponseData
+import warnings
 
 # --- IMPORT CẤU HÌNH AI & AUTH TỪ ENV (Tương tự insight_router) ---
 KEYS_STR = os.getenv("GEMINI_API_KEYS", "")
@@ -113,12 +115,17 @@ TRAINING_NUMERICAL_FEATURES = [
     'facade_width_m', 'road_width_m',
     'score_healthcare', 'score_education', 'score_shopping',
     'score_transportation', 'score_environment', 'score_entertainment',
-    'score_safety', 'livability_score'
+    'score_safety', 'dist_healthcare', 'count_healthcare', 'dist_education', 'count_education',
+    'dist_safety', 'count_safety', 'dist_transport', 'count_transport',
+    'dist_environment', 'count_environment', 'dist_shopping', 'count_shopping', 'dist_entertainment',
+    'count_entertainment'
 ]
+
 TRAINING_CATEGORICAL_FEATURES = [
     'property_type', 'legal_status', 'house_direction',
     'balcony_direction', 'furniture_status', 'address_district'
 ]
+
 ALL_TRAINING_FEATURES = TRAINING_NUMERICAL_FEATURES + TRAINING_CATEGORICAL_FEATURES
 
 WEIGHTS = {
@@ -133,28 +140,143 @@ async def predict_property_price(
     scoring_db: Session = Depends(get_scoring_db)
 ):
     try:
-        # 1. Tính Livability Score (Realtime)
+        # 1. Tính toán Livability Score
         calculator = LivabilityCalculator(scoring_db=scoring_db)
-        scores, _ = calculator.calculate_from_coordinates(payload.latitude, payload.longitude)
+        scores, raw_metrics = calculator.calculate_from_coordinates(payload.latitude, payload.longitude)
         
-        total_livability = 0.0
-        weights = fetch_user_weights(user_id) if user_id else WEIGHTS
+        # 2. Chuẩn bị Dictionary dữ liệu (Thay vì tạo DataFrame ngay)
+        # Khởi tạo dict với giá trị mặc định là None
+        row_data = {col: None for col in ALL_TRAINING_FEATURES}
 
-        for key, weight in weights.items():
-            total_livability += scores.get(key, 0) * weight
+        # --- GÁN DỮ LIỆU SỐ (Physical Attributes) ---
+        row_data['area'] = float(payload.area)
+        row_data['num_bedrooms'] = float(payload.num_bedrooms)
+        row_data['num_bathrooms'] = float(payload.num_bathrooms)
+        row_data['num_floors'] = float(payload.num_floors)
+        row_data['facade_width_m'] = float(payload.facade_width_m)
+        row_data['road_width_m'] = float(payload.road_width_m)
+
+        # --- GÁN DỮ LIỆU CHỮ (Categorical Attributes) ---
+        # Pandas sẽ tự hiểu đây là cột object/string
+        row_data['property_type'] = str(payload.property_type)
+        row_data['legal_status'] = str(payload.legal_status)
+        row_data['house_direction'] = str(payload.house_direction) if payload.house_direction else "Unknown"
+        row_data['balcony_direction'] = str(payload.balcony_direction) if payload.balcony_direction else "Unknown"
+        row_data['furniture_status'] = str(payload.furniture_status) if payload.furniture_status else "Unknown"
+        row_data['address_district'] = str(payload.address_district)
+
+        # --- GÁN DỮ LIỆU TÍNH TOÁN (Scores & Metrics) ---
+        # Tính tổng điểm
+        # A. Lấy trọng số người dùng & Chuẩn hóa
+        raw_weights = fetch_user_weights(user_id) if user_id else WEIGHTS
+        total_w = sum(raw_weights.values())
+        # Chuẩn hóa trọng số về tổng = 1.0 (Tránh trường hợp tổng trọng số > 1 gây sai số)
+        w = {k: v / total_w for k, v in raw_weights.items()} if total_w > 0 else raw_weights
+
+        # B. Lấy điểm thành phần (S1...S7)
+        s_health = float(scores.get('score_healthcare', 0))
+        s_edu = float(scores.get('score_education', 0))
+        s_shop = float(scores.get('score_shopping', 0))
+        s_trans = float(scores.get('score_transportation', 0))
+        s_env = float(scores.get('score_environment', 0))
+        s_enter = float(scores.get('score_entertainment', 0))
+        s_safety = float(scores.get('score_safety', 0))
+
+        # C. Lấy chỉ số đặc biệt (P_flood, P_accident, P_project)
+        p_flood = float(scores.get('flood_impact_score', 0))
+        p_accident = float(scores.get('accident_impact_score', 0))
+        p_project = float(scores.get('future_project_score', 0))
+
+        # D. Áp dụng Logic Hiệu chỉnh (Corrected Model) - KHỚP VỚI KHÓA LUẬN
         
-        # 2. Dự đoán giá (AI Model)
-        input_data = payload.model_dump()
-        input_data.update(scores)
-        input_data['livability_score'] = total_livability
+        # 1. Phạt Giao thông (S'_trans): -2.0*Flood - 0.5*Accident
+        penalty_trans = (2.0 * p_flood) + (0.5 * p_accident)
+        s_trans = max(0.0, s_trans - penalty_trans)
+
+        # 2. Phạt Môi trường (S'_env): -1.0*Flood
+        s_env = max(0.0, s_env - (1.0 * p_flood))
+
+        # 3. Phạt An ninh (S'_safety): -1.5*Accident
+        s_safety = max(0.0, s_safety - (1.5 * p_accident))
+
+        # 4. Tính điểm cơ sở (Base Score) sau khi phạt
+        base_score = (
+            s_health * w.get('score_healthcare', 0) +
+            s_edu * w.get('score_education', 0) +
+            s_shop * w.get('score_shopping', 0) +
+            s_trans * w.get('score_transportation', 0) +
+            s_env * w.get('score_environment', 0) +
+            s_enter * w.get('score_entertainment', 0) +
+            s_safety * w.get('score_safety', 0)
+        )
+
+        # 5. Cộng thưởng Dự án (Bonus): +1.0*Project
+        potential_bonus = p_project * 1.0
         
-        df = pd.DataFrame([input_data])
-        for col in ALL_TRAINING_FEATURES:
-            if col not in df.columns: df[col] = np.nan
+        # 6. Tổng hợp & Capping
+        final_score = base_score + potential_bonus
+        total_livability = round(min(100.0, max(0.0, final_score)), 2)
+
+        # Gán vào DataFrame để dự đoán giá
+        row_data['livability_score'] = float(total_livability) 
+
+        # Gán Score thành phần
+        for key in scores:
+            if key in row_data:
+                row_data[key] = float(scores[key])
+
+        # Gán Metrics (Raw Distance/Count) - Xử lý lệch tên biến
+        # Mapping thủ công để đảm bảo an toàn tuyệt đối
+        mappings = {
+            'dist_transport': ['dist_transport', 'dist_transportation'],
+            'count_transport': ['count_transport', 'count_transportation'],
+            'dist_safety': ['dist_safety', 'dist_public_safety'],
+            'count_safety': ['count_safety', 'count_public_safety']
+        }
+
+        # Duyệt qua các cột metrics chuẩn
+        for col in TRAINING_NUMERICAL_FEATURES:
+            if col.startswith('dist_') or col.startswith('count_'):
+                # Tìm giá trị trong raw_metrics
+                val = None
+                
+                # Kiểm tra mapping đặc biệt
+                if col in mappings:
+                    for alias in mappings[col]:
+                        if alias in raw_metrics and raw_metrics[alias] is not None:
+                            val = raw_metrics[alias]
+                            break
+                # Kiểm tra trực tiếp
+                elif col in raw_metrics:
+                    val = raw_metrics[col]
+                
+                # Gán giá trị (hoặc 0 nếu không tìm thấy)
+                row_data[col] = float(val) if val is not None else 0.0
+
+        # 3. TẠO DATAFRAME TỪ DICTIONARY (Bước quan trọng nhất)
+        # Lúc này Pandas tự infer: cột số là float, cột chữ là object -> Hết lỗi Incompatible dtype
+        df = pd.DataFrame([row_data])
+
+        # Sắp xếp đúng thứ tự cột như lúc train (Bắt buộc)
         df_ordered = df[ALL_TRAINING_FEATURES]
         
-        predicted_price = PriceModel.predict(df_ordered)
-        price_billions = predicted_price / 1_000_000_000
+        # In debug để kiểm tra data
+        print("DEBUG ROW DATA:", df_ordered.iloc[0].to_dict())
+
+        # 4. DỰ ĐOÁN & INVERSE LOG
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            raw_pred = PriceModel.predict(df_ordered)
+
+        # Xử lý kết quả scalar/array
+        if isinstance(raw_pred, (list, np.ndarray)) and len(raw_pred) > 0:
+            predicted_log_price = float(raw_pred[0])
+        else:
+            predicted_log_price = float(raw_pred)
+
+        # Chuyển Log -> Giá thực (Tỷ lệ nghịch với np.log1p)
+        predicted_real_price = np.expm1(predicted_log_price)
+        price_billions = predicted_real_price / 1_000_000_000
 
         amenity_context = get_amenities_context_by_coords(scoring_db, payload.latitude, payload.longitude)
 
@@ -237,7 +359,7 @@ async def predict_property_price(
                     balcony_direction=payload.balcony_direction,
                     furniture_status=payload.furniture_status,
                     # Output
-                    predicted_price=predicted_price,
+                    predicted_price=predicted_real_price,
                     predicted_price_billions=price_billions,
                     ai_insight=ai_insight_text, # <--- LƯU INSIGHT VÀO DB
                     # Scores
@@ -259,7 +381,7 @@ async def predict_property_price(
         # 7. Trả kết quả
         result = PredictionResponse(
             prediction_id=prediction_id,
-            predicted_price=round(predicted_price, 0),
+            predicted_price=round(predicted_real_price, 0),
             predicted_price_billions=round(price_billions, 2),
             livability_score=round(total_livability, 2),
             component_scores=scores,
@@ -485,6 +607,12 @@ async def predict_by_property_id(
         prop = property_db.query(Property).filter(Property.id == property_id).first()
         if not prop:
             return APIDetailResponse(status="404", result="Failed", error="Property not found")
+        
+        score_record = scoring_db.query(PropertyLivabilityScore).filter(
+            PropertyLivabilityScore.property_id == property_id
+        ).first()
+        if not score_record:
+            return APIDetailResponse(status="404", result="Failed", error="Property not found")
 
         # Lấy tọa độ (Sử dụng ST_X, ST_Y để trích xuất từ cột Geometry)
         coords = property_db.execute(
@@ -522,6 +650,20 @@ async def predict_by_property_id(
             'balcony_direction': prop.balcony_direction,
             'furniture_status': prop.furniture_status,
             'address_district': prop.address_district,
+            'dist_healthcare': score_record.dist_healthcare,
+            'count_healthcare': score_record.count_healthcare,
+            'dist_education': score_record.dist_education,
+            'count_education': score_record.count_education,
+            'dist_safety': score_record.dist_safety,
+            'count_safety': score_record.count_safety,
+            'dist_transport': score_record.dist_transportation,
+            'count_transport': score_record.count_transportation,
+            'dist_environment': score_record.dist_environment,
+            'count_environment': score_record.count_environment,
+            'dist_shopping': score_record.dist_shopping,
+            'count_shopping': score_record.count_shopping,
+            'dist_entertainment': score_record.dist_entertainment,
+            'count_entertainment': score_record.count_entertainment, 
             # Merge scores
             'livability_score': total_livability,
             **scores
@@ -533,12 +675,25 @@ async def predict_by_property_id(
             if col not in df.columns: df[col] = np.nan
         df_ordered = df[ALL_TRAINING_FEATURES]
 
-        # 4. Dự đoán giá
-        predicted_price = PriceModel.predict(df_ordered)
-        price_billions = predicted_price / 1_000_000_000
+        print("DEBUG ROW DATA:", df_ordered.iloc[0].to_dict())
+
+       # 4. DỰ ĐOÁN & INVERSE LOG
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            raw_pred = PriceModel.predict(df_ordered)
+
+        # Xử lý kết quả scalar/array
+        if isinstance(raw_pred, (list, np.ndarray)) and len(raw_pred) > 0:
+            predicted_log_price = float(raw_pred[0])
+        else:
+            predicted_log_price = float(raw_pred)
+
+        # Chuyển Log -> Giá thực (Tỷ lệ nghịch với np.log1p)
+        predicted_real_price = np.expm1(predicted_log_price)
+        price_billions = predicted_real_price / 1_000_000_000
         
         result = PredictionByPropertIdResponse(
-            predicted_price=round(predicted_price, 0),
+            predicted_price=round(predicted_real_price, 0),
             predicted_price_billions=round(price_billions, 2),
             livability_score=round(total_livability, 2),
             component_scores=scores

@@ -121,14 +121,17 @@ def fetch_user_weights(user_id: int) -> Dict[str, float]:
 
 # --- LOGIC TÍNH TOÁN ---
 def calculate_overall_score(score_obj: PropertyLivabilityScore, weights: dict, include_special: bool = True) -> float:
-    # 1. Chuẩn hóa trọng số (Normalized Weights) - BẮT BUỘC
+    """
+    Tính chỉ số sống dựa trên Mô hình Tổng hợp Đa tiêu chí có Hiệu chỉnh (Corrected Multi-Criteria Aggregation).
+    """
+    # 1. Chuẩn hóa trọng số (Normalized Weights)
     total_weight = sum(weights.values())
     if total_weight == 0: return 0.0
-    w = {k: v / total_weight for k, v in weights.items()} # w['score_healthcare'], ...
+    w = {k: v / total_weight for k, v in weights.items()}
 
     def get_val(val): return float(val) if val is not None else 0.0
 
-    # 2. Lấy dữ liệu thô
+    # 2. Lấy dữ liệu điểm cơ sở (S1...S7) - Thang 0-100
     s_health = get_val(score_obj.score_healthcare)
     s_edu = get_val(score_obj.score_education)
     s_shop = get_val(score_obj.score_shopping)
@@ -138,28 +141,38 @@ def calculate_overall_score(score_obj: PropertyLivabilityScore, weights: dict, i
     s_safety = get_val(score_obj.score_safety)
 
     # 3. Xử lý Chỉ số đặc biệt (Special Indicators)
+    # Bước 1: Hiệu chỉnh ngữ cảnh (Contextual Correction)
     potential_bonus = 0.0
     
     if include_special:
-        # Lấy điểm phạt từ DB (đã được tính bằng Logarit + Decay)
-        p_flood = get_val(score_obj.flood_impact_score)      # Max 20
-        p_accident = get_val(score_obj.accident_impact_score) # Max 15
-        raw_potential = get_val(score_obj.future_project_score) # Max 30
+        # Lấy điểm phạt từ DB (Đã được chuẩn hóa về thang [0-10])
+        p_flood = get_val(score_obj.flood_impact_score)       # Max 10
+        p_accident = get_val(score_obj.accident_impact_score) # Max 10
+        p_project = get_val(score_obj.future_project_score)   # Max 10 (Tiềm năng)
         
-        # Ngập lụt: Tác động kép (Giao thông & Môi trường)
-        # Nếu ngập 20đ -> Trừ 20đ Giao thông VÀ Trừ 10đ Môi trường (Do nước bẩn)
-        s_trans = max(0, s_trans - p_flood) 
-        s_env   = max(0, s_env - (p_flood * 0.5)) 
+        # --- A. PHẠT (PENALTY) ---
+        
+        # 1. Giao thông (S'_trans): Chịu tác động kép
+        # - Ngập lụt (Tê liệt chức năng): Hệ số Gamma = 2.0 (Max trừ 20đ)
+        # - Tai nạn (Gián đoạn tạm thời): Hệ số Gamma = 0.5 (Max trừ 5đ)
+        penalty_trans = (2.0 * p_flood) + (0.5 * p_accident)
+        s_trans = max(0.0, s_trans - penalty_trans)
 
-        # Tai nạn: Tác động kép (An ninh & Giao thông)
-        # Nếu tai nạn 15đ -> Trừ 15đ An ninh VÀ Trừ 5đ Giao thông (Do kẹt xe vụ tai nạn)
-        s_safety = max(0, s_safety - p_accident)
-        s_trans  = max(0, s_trans - (p_accident * 0.33))
+        # 2. Môi trường (S'_env): Chịu tác động thứ cấp
+        # - Ngập lụt (Ô nhiễm): Hệ số Gamma = 1.0 (Max trừ 10đ)
+        s_env = max(0.0, s_env - (1.0 * p_flood))
 
-        # Max bonus thực tế sẽ là 30 * 0.3 = 9 điểm.
-        potential_bonus = raw_potential * 0.3
+        # 3. An ninh (S'_safety): Chịu tác động tâm lý
+        # - Tai nạn (Sợ hãi): Hệ số Gamma = 1.5 (Max trừ 15đ)
+        s_safety = max(0.0, s_safety - (1.5 * p_accident))
 
-    # 4. Tính tổng có trọng số (Weighted Sum Model)
+        # --- B. THƯỞNG (BONUS) ---
+        # Bước 3: Cộng thưởng Tiềm năng
+        # Hệ số trọng số dự án Gamma_project = 1.0 (Max thưởng 10đ)
+        potential_bonus = p_project * 1.0
+
+    # 4. Bước 2: Tổng hợp theo trọng số người dùng (Weighted Sum Model)
+    # Tính S_base
     base_score = (
         s_health * w.get('score_healthcare', 0) +
         s_edu * w.get('score_education', 0) +
@@ -170,8 +183,7 @@ def calculate_overall_score(score_obj: PropertyLivabilityScore, weights: dict, i
         s_safety * w.get('score_safety', 0)
     )
 
-    # 5. Cộng điểm tiềm năng (Value Added)
-    # Tiềm năng là giá trị gia tăng, cộng trực tiếp vào sau cùng
+    # 5. Cộng điểm tiềm năng
     final_score = base_score + potential_bonus
 
     # 6. Capping (Giới hạn [0-100])

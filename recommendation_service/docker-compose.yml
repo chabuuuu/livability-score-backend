@@ -36,6 +36,25 @@ services:
     networks:
       - kltn-shared-network
 
+  kltn-recommendation-worker:
+    image: kltn-recommendation-service-be:${IMAGE_VERSION}
+    container_name: kltn-recommendation-worker
+    # Không cần ports vì worker không lắng nghe HTTP request
+    command: python worker/recommendation_worker.py
+    env_file:
+      - .env
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5" # Worker cần nhiều CPU hơn để tính toán ma trận
+          memory: 1G
+        reservations:
+          cpus: "0.3"
+          memory: 500M
+    networks:
+      - kltn-shared-network
+
 networks:
   kltn-shared-network:
     external: true

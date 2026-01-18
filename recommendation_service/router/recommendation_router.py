@@ -13,7 +13,7 @@ from model.property import Property
 from model.livability_score import PropertyLivabilityScore
 from router.livability_router import DEFAULT_WEIGHTS, fetch_user_weights
 from schema.common import APIResponse, ResponseData
-
+import json
 router = APIRouter(prefix="/api/v1/recommendation", tags=["Recommendation"])
 
 # --- Schema ---
@@ -73,6 +73,23 @@ def get_home_recommendations(
     score_db: Session = Depends(get_scoring_db)
 ):
     try:
+        # --- BƯỚC 0: CHECK REDIS CACHE (Chỉ nếu user đã login) ---
+        cache_key = ""
+        if user_id:
+            # Làm tròn tọa độ 3 số lẻ (chính xác ~100m) để tăng cache hit khi GPS nhảy nhẹ
+            lat_r = round(lat, 3)
+            lng_r = round(lng, 3)
+            cache_key = f"rec:home:result:{user_id}:{lat_r}:{lng_r}:{radius_km}:{limit}"
+            
+            cached_data = redis_client.get(cache_key)
+            if cached_data:
+                # Cache Hit! Deserialize và trả về ngay
+                print(f"⚡ [CACHE HIT] User {user_id}")
+                items_data = json.loads(cached_data)
+                # Convert dict back to Pydantic models (optional, but good for validation)
+                # items = [PropertyCard(**item) for item in items_data]
+                return APIResponse(status="200", result="Succeeded", data=ResponseData(items=items_data))
+
         # --- TẦNG 1: KHOANH VÙNG KHÔNG GIAN (Spatial Filtering) ---
         # Lấy danh sách ứng viên sơ bộ (Candidates) từ DB Property
         # Lấy nhiều hơn limit (ví dụ 200) để có dữ liệu cho các tầng sau lọc và xếp hạng
@@ -239,6 +256,17 @@ def get_home_recommendations(
             if p_obj:
                 card = map_to_schema(p_obj, pick["dist"], pick["rec_type"])
                 result_cards.append(card)
+
+        # --- BƯỚC CUỐI: SAVE TO REDIS CACHE (Chỉ nếu user đã login) ---
+        if user_id and result_cards:
+            try:
+                # Serialize list Pydantic model sang List Dict -> JSON String
+                json_data = [card.model_dump() for card in result_cards]
+                # Set TTL 300 giây (5 phút)
+                redis_client.setex(cache_key, 300, json.dumps(json_data))
+                print(f"💾 [CACHE SAVED] User {user_id} - {len(result_cards)} items")
+            except Exception as e:
+                print(f"Cache Save Error: {e}")
 
         return APIResponse(
             status="200", 

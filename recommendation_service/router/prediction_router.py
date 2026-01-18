@@ -370,7 +370,11 @@ async def predict_property_price(
                     score_transportation=scores.get('score_transportation'),
                     score_environment=scores.get('score_environment'),
                     score_entertainment=scores.get('score_entertainment'),
-                    score_public_safety=scores.get('score_public_safety') 
+                    score_public_safety=scores.get('score_safety'),
+                    flood_impact_score=scores.get('flood_impact_score'),
+                    accident_impact_score=scores.get('accident_impact_score'),
+                    future_project_score=scores.get('future_project_score'),
+                    # Metrics
                 )
                 scoring_db.add(new_history)
                 scoring_db.commit()

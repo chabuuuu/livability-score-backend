@@ -49,6 +49,10 @@ class PredictHistory(Base):
     score_shopping = Column(Numeric(30, 15))
     score_entertainment = Column(Numeric(30, 15))
 
+    flood_impact_score = Column(Numeric(30, 15))
+    accident_impact_score = Column(Numeric(30, 15))
+    future_project_score = Column(Numeric(30, 15))
+
     # Metadata
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
@@ -64,5 +68,8 @@ class PredictHistory(Base):
             "score_environment": float(self.score_environment) if self.score_environment is not None else 0.0,
             "score_public_safety": float(self.score_public_safety) if self.score_public_safety is not None else 0.0,
             "score_shopping": float(self.score_shopping) if self.score_shopping is not None else 0.0,
-            "score_entertainment": float(self.score_entertainment) if self.score_entertainment is not None else 0.0
+            "score_entertainment": float(self.score_entertainment) if self.score_entertainment is not None else 0.0,
+            "flood_impact_score": float(self.flood_impact_score) if self.flood_impact_score is not None else 0.0,
+            "accident_impact_score": float(self.accident_impact_score) if self.accident_impact_score is not None else 0.0,
+            "future_project_score": float(self.future_project_score) if self.future_project_score is not None else 0.0
         }

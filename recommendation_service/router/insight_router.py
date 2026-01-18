@@ -276,29 +276,30 @@ async def analyze_livability_stream(
         - An ninh: {score_record.score_safety} (Khoảng cách đồn CA: {score_record.dist_safety}m) (Số lượng: {score_record.count_safety})
 
 
-        --- CHỈ SỐ ĐẶC BIỆT (Tác động từ tin tức thực tế) ---
-        Các chỉ số này được tổng hợp từ tin tức thực tế (News & Social Listening). Hãy chú ý thang điểm riêng biệt sau:
+        --- CHỈ SỐ ĐẶC BIỆT (Dữ liệu thực tế - Đã chuẩn hóa thang 10) ---
+        Các chỉ số này được tổng hợp từ tin tức & dữ liệu không gian, phản ánh tác động thực tế của môi trường xung quanh. 
+        LƯU Ý: Tất cả đều dùng thang điểm 10.
 
-        A. RỦI RO NGẬP LỤT (Thang 0 - 20):
-        - Điểm hiện tại: {score_record.flood_impact_score or 0}/20
+        A. RỦI RO NGẬP LỤT (Thang 0 - 10):
+        - Điểm hiện tại: {score_record.flood_impact_score or 0}/10
         - Hướng dẫn đọc: 
-            + 0-5: Khu vực khô ráo, an toàn.
-            + 5-12: Có điểm ngập cục bộ khi mưa lớn.
-            + >12: CẢNH BÁO ĐỎ - Khu vực trũng thấp, ngập thường xuyên/nghiêm trọng. -> Cần trừ điểm nặng vào nhận xét về Giao thông & Môi trường.
+            + 0 - 2.0: Khu vực khô ráo, địa hình cao, hiếm khi ngập.
+            + 2.0 - 6.0: Có điểm ngập cục bộ hoặc ngập nhẹ khi triều cường/mưa lớn.
+            + > 6.0: CẢNH BÁO ĐỎ - Khu vực trũng thấp, điểm đen về ngập lụt. -> Cần trừ điểm nặng vào nhận xét về Giao thông & Môi trường.
 
-        B. RỦI RO TAI NẠN/AN NINH (Thang 0 - 15):
-        - Điểm hiện tại: {score_record.accident_impact_score or 0}/15
+        B. RỦI RO TAI NẠN/AN NINH (Thang 0 - 10):
+        - Điểm hiện tại: {score_record.accident_impact_score or 0}/10
         - Hướng dẫn đọc:
-            + 0-3: Khu vực bình yên.
-            + 3-8: Cần lưu ý khi đi đêm.
-            + >8: CẢNH BÁO - "Điểm đen" tai nạn hoặc an ninh phức tạp. -> Cần cảnh báo người mua.
+            + 0 - 2.0: Khu vực an ninh tốt, giao thông ổn định.
+            + 2.0 - 5.0: Mật độ giao thông cao, thỉnh thoảng có va chạm hoặc trộm cắp vặt.
+            + > 5.0: CẢNH BÁO - Khu vực phức tạp về an ninh hoặc là "điểm đen" tai nạn. -> Cần cảnh báo người mua về an toàn.
 
-        C. TIỀM NĂNG HẠ TẦNG (Thang 0 - 30):
-        - Điểm hiện tại: {score_record.future_project_score or 0}/30
+        C. TIỀM NĂNG HẠ TẦNG (Thang 0 - 10):
+        - Điểm hiện tại: {score_record.future_project_score or 0}/10
         - Hướng dẫn đọc:
-            + 0-5: Hạ tầng ổn định, ít thay đổi.
-            + 5-15: Có dự án nâng cấp nhỏ.
-            + >15: CƠ HỘI ĐẦU TƯ LỚN - Có đại dự án (Metro, Cầu, Đường lớn) đang/sắp triển khai. -> Điểm cộng lớn cho tiềm năng tăng giá.
+            + 0 - 2.0: Quy hoạch ổn định, hạ tầng hiện hữu, ít thay đổi.
+            + 2.0 - 6.0: Có tin tức về dự án nâng cấp, mở rộng đường hoặc tiện ích mới.
+            + > 6.0: CƠ HỘI ĐẦU TƯ LỚN - Nằm trong quy hoạch các đại dự án trọng điểm (Metro, Vành đai, Cầu lớn). -> Là yếu tố "Bonus" tăng giá trị BĐS.
 
         --- ĐỊA ĐIỂM THỰC TẾ XUNG QUANH (Context) ---
         Biết rằng xung quanh bất động sản này có các địa điểm nổi bật sau:

@@ -134,13 +134,13 @@ func main() {
 	// 2. Khởi tạo Background Worker (Cronjob)
 	c := cron.New()
 	_, err = c.AddFunc("@every 10m", func() {
-		service.SyncHighScoresToRedis()
+		service.SyncHotPropertiesToRedis()
 	})
 	if err != nil {
 		log.Fatal("Lỗi khởi tạo Cron:", err)
 	}
 	c.Start()
-	go service.SyncHighScoresToRedis()
+	go service.SyncHotPropertiesToRedis()
 
 	// 3. Khởi tạo API Server với Gin
 	r := gin.Default()

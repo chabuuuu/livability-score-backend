@@ -95,7 +95,7 @@ jobs:
           port: 22
           script: |
             # 1. Di chuyển vào thư mục deploy
-            cd ${{ env.DEPLOY_FOLDER }}
+            cd ${{ env.DEPLOY_FOLDER }}/${{ env.SERVICE_FOLDER }}
 
             # 2. Copy file .env từ nơi lưu trữ bí mật vào thư mục hiện tại để docker-compose đọc
             cp ${{ env.ENV_FILE_PATH }} ${{ env.DEPLOY_FOLDER }}/${{ env.SERVICE_FOLDER }}

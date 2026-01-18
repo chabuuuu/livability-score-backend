@@ -25,8 +25,8 @@ def run_optimized_batch():
         print("--- KHỞI TẠO BATCH PROCESS ---")
         
         # 1. Auto Resume: Tìm điểm bắt đầu
-        # start_id = get_last_processed_id(scoring_db)
-        start_id = 1
+        start_id = get_last_processed_id(scoring_db)
+        # start_id = 1
         print(f"🔄 Hệ thống phát hiện đã xử lý đến ID: {start_id}")
         print(f"➡️ Sẽ bắt đầu tính toán từ ID: {start_id + 1}")
 

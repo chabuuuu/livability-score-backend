@@ -17,7 +17,7 @@ def job():
     print("\n>>> START SPECIAL INDICATOR PIPELINE <<<")
     # 1. Thu thập (vào Scoring DB)
     # count = crawl_news()
-    count = 0;
+    count = 1;
     
     # 2. Phân tích & Cross-DB Update
     if count > 0:

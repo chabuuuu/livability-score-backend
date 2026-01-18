@@ -409,7 +409,7 @@ func sendPushNotification(userID, propID string, distance, score float64, views 
                 Sound:     "default",
                 ChannelID: "real_estate_alerts",
                 Icon:      "ic_stat_icon",
-                ClickAction: "FCM_PLUGIN_ACTIVITY", 
+                // ClickAction: "FCM_PLUGIN_ACTIVITY", 
             },
         },
 		APNS: &messaging.APNSConfig{

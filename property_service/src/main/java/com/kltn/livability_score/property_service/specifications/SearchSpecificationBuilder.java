@@ -46,7 +46,10 @@ public class SearchSpecificationBuilder<T> {
               }
               break;
             case LIKE:
-              predicates.add(criteriaBuilder.like(root.get(key), "%" + value + "%"));
+              predicates.add(criteriaBuilder.like(
+                  criteriaBuilder.lower(root.get(key)),
+                  "%" + value.toLowerCase() + "%"
+              ));
               break;
             case RANGE: {
               String[] parts = value.split("-");

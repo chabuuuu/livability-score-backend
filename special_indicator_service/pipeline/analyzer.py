@@ -284,18 +284,17 @@ def process_batch(batch, db):
 def aggregate_and_propagate_scores(score_db):
     print("--- [Aggregator] Tổng hợp điểm và Update Cross-DB ---")
     
-
     # 1. Tổng hợp điểm vào District Stats
-    # Áp dụng Time Decay (Suy giảm theo thời gian) và Logarithmic Scaling (Bão hòa)
+    # Áp dụng mô hình Tích lũy Logarit Tổng quát (Generalized Logarithmic Accumulation)
+    # Tất cả các chỉ số đều được chuẩn hóa về thang điểm [0, 10]
+    
     agg_sql = text("""
         UPDATE district_special_stats d
         SET 
             -- 1. NGẬP LỤT (FLOOD)
-            -- Logic: Cộng dồn điểm các bài báo trong 60 ngày, nhưng mỗi bài báo bị giảm giá trị theo thời gian (Exponential Decay).
-            -- Sau đó lấy Logarit của tổng để tránh điểm số tăng vọt tuyến tính.
-            -- Công thức: 8 * LN(1 + SUM(score * EXP(-0.05 * days_diff)))
-            flood_impact_score = LEAST(20, 
-                8 * LN(1 + (
+            -- Cấu hình: Cmax=10, K=4.2 (Độ nhạy cao), Lambda=0.05 (Suy giảm sau 2 tuần)
+            flood_impact_score = LEAST(10, 
+                4.2 * LN(1 + (
                     SELECT COALESCE(SUM(
                         impact_score * EXP(-0.05 * EXTRACT(DAY FROM (NOW() - published_date)))
                     ), 0) 
@@ -307,9 +306,9 @@ def aggregate_and_propagate_scores(score_db):
             ),
             
             -- 2. TAI NẠN (ACCIDENT)
-            -- Logic tương tự Flood nhưng hệ số K nhỏ hơn (6) và trần thấp hơn (15)
-            accident_impact_score = LEAST(15, 
-                6 * LN(1 + (
+            -- Cấu hình: Cmax=10, K=3.0 (Độ nhạy trung bình - Cần tích lũy), Lambda=0.05
+            accident_impact_score = LEAST(10, 
+                3.0 * LN(1 + (
                     SELECT COALESCE(SUM(
                         impact_score * EXP(-0.05 * EXTRACT(DAY FROM (NOW() - published_date)))
                     ), 0) 
@@ -321,27 +320,34 @@ def aggregate_and_propagate_scores(score_db):
             ),
             
             -- 3. DỰ ÁN (PROJECT)
-            -- Không dùng Time Decay (vì dự án cũ vẫn có giá trị). 
-            -- Chỉ dùng Logarit để nén dải điểm (tránh việc cộng dồn quá nhiều dự án nhỏ làm điểm quá cao).
-            -- Window xét duyệt dài hơn (365 ngày) vì tin dự án có giá trị lâu dài.
-            future_project_score = LEAST(30, 
-                10 * LN(1 + (
+            -- Cấu hình: Cmax=10, K=4.2 (Độ nhạy cao), Lambda=0 (KHÔNG SUY GIẢM)
+            -- Lý do: Thông tin quy hoạch có giá trị tích lũy dài hạn, không mất đi theo ngày.
+            future_project_score = LEAST(10, 
+                4.2 * LN(1 + (
                     SELECT COALESCE(SUM(impact_score), 0) 
                     FROM news_articles 
                     WHERE district_id = d.id 
                     AND topic = 'PROJECT' 
-                    AND published_date > NOW() - INTERVAL '365 days'
+                    AND published_date > NOW() - INTERVAL '365 days' -- Window dài hạn 1 năm
                 ))
             ),
             
             last_analyzed_at = NOW()
     """)
-    score_db.execute(agg_sql)
-    score_db.commit()
     
-    # 2. Lan truyền Cross-DB (Logic cũ)
+    try:
+        score_db.execute(agg_sql)
+        score_db.commit()
+        print("    -> [Success] Đã tính toán xong chỉ số cấp Quận (Max 10).")
+    except Exception as e:
+        score_db.rollback()
+        print(f"    -> [Error] Lỗi khi tổng hợp District Stats: {e}")
+        return
 
+    # 2. Lan truyền Cross-DB (Propagate to Properties)
+    # Logic: Lấy điểm từ bảng District (Scoring DB) -> Tìm BĐS thuộc quận đó (Property DB) -> Update điểm cho BĐS (Scoring DB)
     
+    # Lấy danh sách quận đã có điểm
     districts = score_db.execute(text("""
         SELECT id, district_name, ST_AsText(boundary) as wkt, 
                flood_impact_score, accident_impact_score, future_project_score
@@ -349,34 +355,49 @@ def aggregate_and_propagate_scores(score_db):
         WHERE boundary IS NOT NULL
     """)).fetchall()
     
-    prop_db = PropertySession()
+    prop_db = PropertySession() # Session kết nối tới DB chứa Bất động sản
     total_props_updated = 0
     
     for dist in districts:
         if not dist.wkt: continue
         
-        # Tìm BĐS trong quận
-        find_props_sql = text("SELECT id FROM properties WHERE ST_Within(location::geometry, ST_GeomFromText(:wkt, 4326))")
-        prop_ids = [row.id for row in prop_db.execute(find_props_sql, {"wkt": dist.wkt}).fetchall()]
-        
-        if not prop_ids: continue
+        try:
+            # Tìm ID các BĐS nằm trong quận này (Spatial Query trên Property DB)
+            find_props_sql = text("SELECT id FROM properties WHERE ST_Within(location::geometry, ST_GeomFromText(:wkt, 4326))")
+            prop_ids = [row.id for row in prop_db.execute(find_props_sql, {"wkt": dist.wkt}).fetchall()]
             
-        # Batch Update
-        batch_size = 1000
-        for i in range(0, len(prop_ids), batch_size):
-            batch_ids = tuple(prop_ids[i:i + batch_size])
-            update_score_sql = text("""
-                UPDATE property_livability_scores
-                SET flood_impact_score = :flood, accident_impact_score = :accident, future_project_score = :project
-                WHERE property_id IN :ids
-            """)
-            score_db.execute(update_score_sql, {
-                "flood": dist.flood_impact_score, "accident": dist.accident_impact_score, 
-                "project": dist.future_project_score, "ids": batch_ids
-            })
-            score_db.commit()
+            if not prop_ids: continue
+                
+            # Batch Update vào bảng điểm (Scoring DB)
+            # Lưu ý: P_flood, P_accident, P_project lúc này đều Max = 10
+            batch_size = 1000
+            for i in range(0, len(prop_ids), batch_size):
+                batch_ids = tuple(prop_ids[i:i + batch_size])
+                
+                # Cần xử lý tuple trong SQL (với tuple 1 phần tử python thêm dấu phẩy gây lỗi syntax nếu không xử lý kỹ)
+                # Dùng list expanding parameter là an toàn nhất với SQLAlchemy
+                update_score_sql = text("""
+                    UPDATE property_livability_scores
+                    SET flood_impact_score = :flood, 
+                        accident_impact_score = :accident, 
+                        future_project_score = :project
+                    WHERE property_id IN :ids
+                """)
+                
+                score_db.execute(update_score_sql, {
+                    "flood": dist.flood_impact_score, 
+                    "accident": dist.accident_impact_score, 
+                    "project": dist.future_project_score, 
+                    "ids": batch_ids
+                })
+                score_db.commit()
+                
+            total_props_updated += len(prop_ids)
+            print(f"    -> Quận {dist.district_name}: Synced {len(prop_ids)} properties.")
             
-        total_props_updated += len(prop_ids)
-        print(f"    -> Quận {dist.district_name}: Synced {len(prop_ids)} properties.")
+        except Exception as e:
+            print(f"    -> [Error] Lỗi xử lý quận {dist.district_name}: {e}")
+            score_db.rollback()
 
     prop_db.close()
+    print(f"--- [Aggregator] Hoàn tất. Tổng cộng cập nhật {total_props_updated} bất động sản. ---")

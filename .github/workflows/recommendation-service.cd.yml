@@ -1,27 +1,23 @@
 name: "[STAGING] CI & CD KLTN Recommendation Service [BE]"
 
 env:
-  # Backend deployment folder on the server
+  # Thư mục chứa code deploy trên server
   DEPLOY_FOLDER: /home/gha-runner/kltn/backend/recommendation_service/source
 
-  # ENV file path on the server
+  # Đường dẫn file .env gốc nằm trên server (đã có sẵn)
   ENV_FILE_PATH: /home/gha-runner/kltn/backend/recommendation_service/env_file/.env
 
-  # Image name for the Docker container
-  IMAGE_NAME: kltn-recommendation-service-be:${{ github.ref_name }}-${{ github.sha }}
+  # Tên Image cơ bản (không bao gồm tag version để dễ tái sử dụng)
+  BASE_IMAGE_NAME: kltn-recommendation-service-be
 
-  # Container name for the service
-  CONTAINER_NAME: kltn-recommendation-service-be
+  # Tạo Tag version dựa trên branch và commit hash
+  IMAGE_TAG: ${{ github.ref_name }}-${{ github.sha }}
 
-  # The filename for the Docker image artifact
+  # Tên file ảnh Docker sẽ lưu
   IMAGE_FILENAME: kltn-recommendation-service-be.tar
 
+  # Thư mục code trong repo
   SERVICE_FOLDER: recommendation_service
-
-  # Docker Compose file path
-  DOCKER_COMPOSE_PATH: ./recommendation_service/docker-compose.yml
-
-  PROJECT_NAME: "KLTN Recommendation Service [BE]"
 
 on:
   push:
@@ -40,10 +36,12 @@ jobs:
         uses: actions/checkout@v3
 
       - name: Build Docker image
-        run: docker build -t ${{ env.IMAGE_NAME }} ./${{ env.SERVICE_FOLDER }}
+        # Build image với tag cụ thể
+        run: docker build -t ${{ env.BASE_IMAGE_NAME }}:${{ env.IMAGE_TAG }} ./${{ env.SERVICE_FOLDER }}
 
       - name: Save Docker image to a tar file
-        run: docker save -o ${{ env.IMAGE_FILENAME }} ${{ env.IMAGE_NAME }}
+        # Lưu image ra file .tar
+        run: docker save -o ${{ env.IMAGE_FILENAME }} ${{ env.BASE_IMAGE_NAME }}:${{ env.IMAGE_TAG }}
 
       - name: Make image file readable
         run: chmod 644 ${{ env.IMAGE_FILENAME }}
@@ -57,9 +55,9 @@ jobs:
           passphrase: ${{ secrets.SERVER_SSH_PASSPHRASE_RECOMMENDATION }}
           port: 22
           source: "${{ env.IMAGE_FILENAME }}"
-          target: "/tmp" # Copy to a temporary directory on the server
+          target: "/tmp" # Copy vào thư mục tạm
 
-      - name: Clean old docker compose script and old env file
+      - name: Clean deploy folder on server
         uses: appleboy/ssh-action@v1.1.0
         with:
           host: ${{ secrets.SERVER_HOST_RECOMMENDATION }}
@@ -67,18 +65,23 @@ jobs:
           key: ${{ secrets.SERVER_SSH_PRIVATE_KEY_RECOMMENDATION }}
           passphrase: ${{ secrets.SERVER_SSH_PASSPHRASE_RECOMMENDATION }}
           port: 22
+          # Xóa thư mục cũ và tạo lại để đảm bảo sạch sẽ
           script: |
-            rm -rf ${{ env.DEPLOY_FOLDER }}/*
+            rm -rf ${{ env.DEPLOY_FOLDER }}
+            mkdir -p ${{ env.DEPLOY_FOLDER }}
 
-      - name: Copy new docker compose script to server
+      - name: Copy docker compose file to server
         uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.SERVER_HOST_RECOMMENDATION }}
           username: ${{ secrets.SERVER_USER_RECOMMENDATION }}
           key: ${{ secrets.SERVER_SSH_PRIVATE_KEY_RECOMMENDATION }}
           passphrase: ${{ secrets.SERVER_SSH_PASSPHRASE_RECOMMENDATION }}
+          port: 22
+          # Copy file compose vào thẳng thư mục deploy
           source: "./${{ env.SERVICE_FOLDER }}/docker-compose.yml"
           target: ${{ env.DEPLOY_FOLDER }}
+          strip_components: 1 # Loại bỏ folder cha (recommendation_service) khi copy
 
   deploy:
     runs-on: ubuntu-latest
@@ -94,14 +97,28 @@ jobs:
           passphrase: ${{ secrets.SERVER_SSH_PASSPHRASE_RECOMMENDATION }}
           port: 22
           script: |
-            cp ${{ env.ENV_FILE_PATH }} ${{ env.DEPLOY_FOLDER }}/${{ env.SERVICE_FOLDER }}
+            # 1. Di chuyển vào thư mục deploy
             cd ${{ env.DEPLOY_FOLDER }}
-            echo "Loading new image from tar file..."
+
+            # 2. Copy file .env từ nơi lưu trữ bí mật vào thư mục hiện tại để docker-compose đọc
+            cp ${{ env.ENV_FILE_PATH }} ./.env
+
+            # 3. Load image mới từ file tar trong /tmp
+            echo "Loading new image..."
             docker load -i /tmp/${{ env.IMAGE_FILENAME }}
-            if [ "$(docker ps -aq -f name=^${{ env.CONTAINER_NAME }}$)" ]; then
-                docker compose -f ${{ env.DOCKER_COMPOSE_PATH }} down ${{ env.CONTAINER_NAME }}
-            fi
-            echo "Waiting for new container: ${{ env.CONTAINER_NAME }} to pull..."
-            IMAGE_VERSION=${{ github.ref_name }}-${{ github.sha }} docker compose -f ${{ env.DOCKER_COMPOSE_PATH }} pull ${{ env.CONTAINER_NAME }}
-            echo "Start new container: ${{ env.CONTAINER_NAME }}..."
-            IMAGE_VERSION=${{ github.ref_name }}-${{ github.sha }} docker compose -f ${{ env.DOCKER_COMPOSE_PATH }} up -d ${{ env.CONTAINER_NAME }}
+
+            # 4. Dọn dẹp file tar để tiết kiệm dung lượng
+            rm /tmp/${{ env.IMAGE_FILENAME }}
+
+            # 5. Export biến môi trường IMAGE_VERSION để docker-compose.yml sử dụng
+            export IMAGE_VERSION=${{ env.IMAGE_TAG }}
+            echo "Deploying version: $IMAGE_VERSION"
+
+            # 6. Chạy Docker Compose
+            # - down: Tắt các container cũ (để đảm bảo sạch sẽ, hoặc bỏ qua nếu muốn zero-downtime tuy nhiên với worker thì nên restart hẳn)
+            # - up -d: Dựng lại container mới
+            docker compose down --remove-orphans
+            docker compose up -d
+
+            # 7. Dọn dẹp các image cũ không dùng đến (dangling images)
+            docker image prune -f

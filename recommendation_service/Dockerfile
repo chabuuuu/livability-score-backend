@@ -22,9 +22,10 @@ FROM python:3.10-slim
 
 WORKDIR /app
 
-# Chỉ cài libpq5 (runtime) chứ không cài compiler
+# Cài đặt libpq5 và libgomp1 (Cần thiết cho joblib/scikit-learn)
 RUN apt-get update && apt-get install -y \
     libpq5 \
+    libgomp1 \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy thư viện đã cài từ stage builder sang

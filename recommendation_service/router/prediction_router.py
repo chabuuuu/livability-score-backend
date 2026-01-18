@@ -74,7 +74,7 @@ def get_amenities_context_by_coords(db: Session, lat: float, lng: float):
                 google_rating,
                 ROW_NUMBER() OVER (PARTITION BY category ORDER BY location <-> ST_SetSRID(ST_MakePoint(:lng, :lat), 4326)) as rn
             FROM amenities
-            WHERE category IN ('healthcare', 'education', 'shopping', 'transportation', 'environment')
+            WHERE category IN ('healthcare', 'education', 'shopping', 'transportation', 'environment', 'entertainment', 'public_safety')
             AND ST_DWithin(location::geography, ST_SetSRID(ST_MakePoint(:lng, :lat), 4326)::geography, 2000)
         )
         SELECT category, name, dist_m, google_rating FROM ranked_amenities WHERE rn <= 2;
@@ -82,7 +82,7 @@ def get_amenities_context_by_coords(db: Session, lat: float, lng: float):
     
     results = db.execute(sql, {"lat": lat, "lng": lng}).fetchall()
     
-    grouped = {cat: [] for cat in ['healthcare', 'education', 'shopping', 'transportation', 'environment']}
+    grouped = {cat: [] for cat in ['healthcare', 'education', 'shopping', 'transportation', 'environment', 'entertainment', 'public_safety']}
     for row in results:
         grouped[row.category].append(f"- {row.name} ({int(row.dist_m)}m, {row.google_rating or 'N/A'}*)")
     
@@ -298,15 +298,56 @@ async def predict_property_price(
         
         --- CHỈ SỐ SỐNG (0-100) ---
         - Tổng hợp: {total_livability:.1f}/100 (Rất quan trọng)
-        - Y tế: {scores.get('score_healthcare')}, Giáo dục: {scores.get('score_education')}
-        - Tiện ích: {scores.get('score_shopping')}, Môi trường: {scores.get('score_environment')}
-        - An ninh: {scores.get('score_safety')}
+        --- DỮ LIỆU ĐIỂM SỐ (Thang 0-100) ---
+        - Y tế: {scores.get('score_healthcare')} (Khoảng cách gần nhất: {row_data['dist_healthcare']}m) (Số lượng: {row_data['count_healthcare']})
+        - Giáo dục: {scores.get('score_education')} (Khoảng cách gần nhất: {row_data['dist_education']}m) (Số lượng: {row_data['count_education']}))
+        - Mua sắm: {scores.get('score_shopping')} (Số lượng quán quanh 500m: {row_data['count_shopping']}) (Khoảng cách gần nhất: {row_data['dist_shopping']}m)
+        - Giao thông: {scores.get('score_transportation')} (Khoảng cách bến xe/trạm: {row_data['dist_transport']}m) (Số lượng: {row_data['count_transport']})
+        - Môi trường/Công viên: {scores.get('score_environment')} (Khoảng cách: {row_data['dist_environment']}m) (Số lượng: {row_data['count_environment']})
+        - Giải trí: {scores.get('score_entertainment')} (Số lượng quán quanh 1km: {row_data['count_entertainment']}) (Khoảng cách gần nhất: {row_data['dist_entertainment']}m)
+        - An ninh: {scores.get('score_safety')} (Khoảng cách đồn CA: {row_data['dist_safety']}m) (Số lượng: {row_data['count_safety']})
 
-        --- TIỆN ÍCH LÂN CẬN (CONTEXT THỰC TẾ) ---
-        - Y tế: {amenity_context.get('healthcare')}
-        - Giáo dục: {amenity_context.get('education')}
-        - Mua sắm: {amenity_context.get('shopping')}
-        - Môi trường: {amenity_context.get('environment')}
+        --- CHỈ SỐ ĐẶC BIỆT (Dữ liệu thực tế - Đã chuẩn hóa thang 10) ---
+        Các chỉ số này được tổng hợp từ tin tức & dữ liệu không gian, phản ánh tác động thực tế của môi trường xung quanh. 
+        LƯU Ý: Tất cả đều dùng thang điểm 10.
+
+        A. RỦI RO NGẬP LỤT (Thang 0 - 10):
+        - Điểm hiện tại: {scores.get('flood_impact_score') or 0}/10
+        - Hướng dẫn đọc: 
+            + 0 - 2.0: Khu vực khô ráo, địa hình cao, hiếm khi ngập.
+            + 2.0 - 6.0: Có điểm ngập cục bộ hoặc ngập nhẹ khi triều cường/mưa lớn.
+            + > 6.0: CẢNH BÁO ĐỎ - Khu vực trũng thấp, điểm đen về ngập lụt. -> Cần trừ điểm nặng vào nhận xét về Giao thông & Môi trường.
+
+        B. RỦI RO TAI NẠN/AN NINH (Thang 0 - 10):
+        - Điểm hiện tại: {scores.get('accident_impact_score') or 0}/10
+        - Hướng dẫn đọc:
+            + 0 - 2.0: Khu vực an ninh tốt, giao thông ổn định.
+            + 2.0 - 5.0: Mật độ giao thông cao, thỉnh thoảng có va chạm hoặc trộm cắp vặt.
+            + > 5.0: CẢNH BÁO - Khu vực phức tạp về an ninh hoặc là "điểm đen" tai nạn. -> Cần cảnh báo người mua về an toàn.
+
+        C. TIỀM NĂNG HẠ TẦNG (Thang 0 - 10):
+        - Điểm hiện tại: {scores.get('future_project_score') or 0}/10
+        - Hướng dẫn đọc:
+            + 0 - 2.0: Quy hoạch ổn định, hạ tầng hiện hữu, ít thay đổi.
+            + 2.0 - 6.0: Có tin tức về dự án nâng cấp, mở rộng đường hoặc tiện ích mới.
+            + > 6.0: CƠ HỘI ĐẦU TƯ LỚN - Nằm trong quy hoạch các đại dự án trọng điểm (Metro, Vành đai, Cầu lớn). -> Là yếu tố "Bonus" tăng giá trị BĐS.
+
+        --- ĐỊA ĐIỂM THỰC TẾ XUNG QUANH (Context) ---
+        Biết rằng xung quanh bất động sản này có các địa điểm nổi bật sau:
+        1. Y tế:
+        {amenity_context.get('healthcare')}
+        2. Giáo dục:
+        {amenity_context.get('education')}
+        3. Mua sắm:
+        {amenity_context.get('shopping')}
+        4. Môi trường sống (Công viên):
+        {amenity_context.get('environment')}
+        5. Giao thông:
+        {amenity_context.get('transportation')}
+        6. Giải trí:
+        {amenity_context.get('entertainment')}
+        7. An ninh:
+        {amenity_context.get('public_safety')}
 
         --- YÊU CẦU ---
         Viết một đoạn phân tích ngắn (khoảng 150 từ), giọng chuyên gia, sắc sảo:

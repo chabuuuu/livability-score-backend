@@ -3,6 +3,7 @@ package com.kltn.livability_score.property_service.specifications;
 import com.kltn.livability_score.property_service.enums.SearchOperatorEnum;
 import com.kltn.livability_score.property_service.model.specifications.SearchDataDto;
 import com.kltn.livability_score.property_service.model.specifications.SearchFilterReq;
+import jakarta.persistence.criteria.Expression;
 import jakarta.persistence.criteria.Predicate;
 import java.lang.reflect.Field;
 import java.util.ArrayList;
@@ -46,10 +47,19 @@ public class SearchSpecificationBuilder<T> {
               }
               break;
             case LIKE:
-              predicates.add(criteriaBuilder.like(
-                  criteriaBuilder.lower(root.get(key)),
-                  "%" + value.toLowerCase() + "%"
-              ));
+
+              // 1. Tạo biểu thức unaccent(lower(column))
+              Expression<String> unaccentColumn = criteriaBuilder.function("f_unaccent", String.class,
+                  criteriaBuilder.lower(root.get(key)));
+
+              // 2. Tạo giá trị tìm kiếm đã được xử lý: % + value + %
+              // Lưu ý: Chúng ta để Database xử lý unaccent cho value luôn để đồng bộ
+              String searchPattern = "%" + value.toLowerCase() + "%";
+              Expression<String> unaccentValue = criteriaBuilder.function("f_unaccent", String.class,
+                  criteriaBuilder.literal(searchPattern));
+
+              // 3. So sánh
+              predicates.add(criteriaBuilder.like(unaccentColumn, unaccentValue));
               break;
             case RANGE: {
               String[] parts = value.split("-");

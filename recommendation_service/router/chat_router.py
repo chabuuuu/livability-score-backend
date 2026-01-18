@@ -14,6 +14,7 @@ import google.generativeai as genai
 from google.api_core import exceptions as google_exceptions
 from config.redis_config import redis_client
 from config.property_db_config import get_property_db
+from config.scoring_db_config import get_scoring_db
 from schema.common import APIResponse, ResponseData
 
 # Import hàm gợi ý từ router khác để tái sử dụng logic
@@ -92,7 +93,8 @@ async def generate_content_smart(prompt: str):
 async def chat_general_stream(
     payload: GeneralChatRequest,
     user_id: int = Depends(get_current_user_id),
-    db: Session = Depends(get_property_db)
+    db: Session = Depends(get_property_db),
+    score_db: Session = Depends(get_scoring_db)
 ):
     """
     Chat với Bot BĐS. 
@@ -124,7 +126,8 @@ async def chat_general_stream(
                 limit=5, # Lấy 5 căn tiêu biểu
                 radius_km=5.0,
                 user_id=user_id,
-                db=db
+                prop_db=db,
+                score_db=score_db
             )
             
             # Trích xuất data từ response

@@ -13,13 +13,20 @@ class LivabilityScoreDTO(BaseModel):
     property_id: int
     
     # Raw Metrics
-    dist_healthcare: Optional[float]
-    dist_education: Optional[float]
-    count_shopping: Optional[int]
-    dist_transportation: Optional[float]
-    dist_environment: Optional[float]
-    count_entertainment: Optional[int]
-    dist_safety: Optional[float]
+    dist_healthcare: Optional[float]      # Khoảng cách đến y tế gần nhất (mét)
+    count_healthcare: Optional[int] # Số lượng tiện ích y tế trong bán kính
+    dist_education: Optional[float]       # Khoảng cách đến giáo dục gần nhất (mét)
+    count_education: Optional[int]  # Số lượng tiện ích giáo dục trong bán kính
+    count_shopping: Optional[int]   # Số lượng tiện ích mua sắm trong bán kính
+    dist_shopping: Optional[float]        # Khoảng cách đến mua sắm gần nhất (mét)
+    dist_transportation: Optional[float]  # Khoảng cách đến giao thông công cộng (mét)
+    count_transportation: Optional[int] # Số lượng tiện ích giao thông trong bán kính
+    dist_environment: Optional[float]     # Khoảng cách đến công viên/không gian xanh (mét)
+    count_environment: Optional[int] # Số lượng tiện ích xanh trong bán kính
+    count_entertainment: Optional[int] # Số lượng tiện ích giải trí trong bán kính
+    dist_entertainment: Optional[float]   # Khoảng cách đến giải trí gần nhất (mét)
+    dist_safety: Optional[float]          # Khoảng cách đến đồn công an/PCCC (mét)
+    count_safety: Optional[int]     # Số lượng tiện ích đồn công an/PCCC trong bán kính
 
     # Normalized Component Scores
     score_healthcare: Optional[float]

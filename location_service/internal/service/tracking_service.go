@@ -403,9 +403,15 @@ func sendPushNotification(userID, propID string, distance, score float64, views 
 			"score":       fmt.Sprintf("%.2f", score),
 		},
 		Android: &messaging.AndroidConfig{
-			Priority: "high",
-			Notification: &messaging.AndroidNotification{Sound: "default"},
-		},
+            Priority: "high", 
+            
+            Notification: &messaging.AndroidNotification{
+                Sound:     "default",
+                ChannelID: "real_estate_alerts",
+                Icon:      "ic_stat_icon",
+                ClickAction: "FCM_PLUGIN_ACTIVITY", 
+            },
+        },
 		APNS: &messaging.APNSConfig{
 			Payload: &messaging.APNSPayload{Aps: &messaging.Aps{Sound: "default"}},
 		},
